@@ -25,13 +25,25 @@ const ProductItem = lazy(() => import("./ProductItem"));
 const RestaurantItem = lazy(() => import("./RestaurantItem"));
 const MyCart = lazy(() => import("./MyCart"));
 
-let FixedSizeList;
-const VIRTUALIZE_THRESHOLD = 40; // threshold to start virtualizing
-try {
+const PAGE_SIZE = 24; // how many items to render at first / per "Show more"
+const PRODUCTS_CACHE_KEY = "liyu_products_cache_v1";
+const CATEGORIES_CACHE_KEY = "liyu_categories_cache_v1";
 
-  FixedSizeList = require('react-window').FixedSizeList;
-} catch (e) {
-  FixedSizeList = null;
+function readCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeCache(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    // storage full or unavailable - ignore
+  }
 }
 
 
@@ -346,10 +358,12 @@ export default function HomePage() {
   const [isSub, setIsSub] = useState(false);
   const [category, setCategory] = useState("FOOD");
   const [tabList, setTabList] = useState([]);
-  const [itemList, setItemList] = useState([]);
+  const [products, setProducts] = useState([]);
   const [subItemList, setSubItemList] = useState([])
   const [subCache, setSubCache] = useState({})
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // categories / tabs
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [searchQuery, setSearchQuery] = useState("");
   const [adminToken, setAdminToken] = useState();
   const searchTimeoutRef = useRef(null);
@@ -374,31 +388,52 @@ export default function HomePage() {
     } catch (error) {
       // fail silently, consider user-visible error in production
     }
-  }, []);
+  }, [subCache]);
 
 
 
+  // Categories and products load independently so the tabs never wait for the big product list.
+  // Cached data (if any) is shown instantly, then refreshed from the server.
   useEffect(() => {
     let mounted = true;
-    async function fetchAll() {
-      try {
-        const [p, c] = await Promise.all([
-          api.get("list-product/"),
-          api.get("list-category/")
-        ]);
-        if (!mounted) return;
-        const sub_category = c.data.filter(item => item.is_sub_category);
-        setItemList([...p.data.reverse(), ...sub_category]);
-        setTabList(c.data);
-      } catch (error) {
-        // handle network error if desired
-      } finally {
-        if (mounted) setLoading(false);
-      }
+
+    const cachedCategories = readCache(CATEGORIES_CACHE_KEY);
+    if (cachedCategories) {
+      setTabList(cachedCategories);
+      setLoading(false);
     }
-    fetchAll();
+    const cachedProducts = readCache(PRODUCTS_CACHE_KEY);
+    if (cachedProducts) {
+      setProducts(cachedProducts);
+      setProductsLoading(false);
+    }
+
+    api.get("list-category/")
+      .then((res) => {
+        if (!mounted) return;
+        setTabList(res.data);
+        writeCache(CATEGORIES_CACHE_KEY, res.data);
+      })
+      .catch(() => {})
+      .finally(() => { if (mounted) setLoading(false); });
+
+    api.get("list-product/")
+      .then((res) => {
+        if (!mounted) return;
+        const list = [...res.data].reverse();
+        setProducts(list);
+        writeCache(PRODUCTS_CACHE_KEY, list);
+      })
+      .catch(() => {})
+      .finally(() => { if (mounted) setProductsLoading(false); });
+
     return () => { mounted = false; };
   }, []); // run once
+
+  const itemList = useMemo(
+    () => [...products, ...tabList.filter((item) => item.is_sub_category)],
+    [products, tabList]
+  );
 
   // Debounced search handler (simple, no external lib)
   const onSearchChange = useCallback((next) => {
@@ -412,6 +447,10 @@ export default function HomePage() {
   }, []);
 
   const dataSource = isSub ? subItemList : itemList;
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [category, isSub, searchQuery]);
 
   const filteredItems = useMemo(() => {
     if (!dataSource || dataSource.length === 0) return [];
@@ -438,21 +477,10 @@ export default function HomePage() {
   
   }, [dataSource, searchQuery, isSub, category]);
   
-  // Helpers for virtualization rendering
-  const renderItem = useCallback(({ index, style }) => {
-    const item = filteredItems[index];
-    if (!item) return null;
-
-    const ItemComponent = item.is_sub_category ? RestaurantItem : ProductItem;
-
-    return (
-      <div style={style} key={item.id ?? index}>
-        <Suspense fallback={<div style={{ height: 80 }}>Loading...</div>}>
-          <ItemComponent item={item} addItem={addItem} />
-        </Suspense>
-      </div>
-    );
-  }, [filteredItems, addItem]);
+  const visibleItems = useMemo(
+    () => filteredItems.slice(0, visibleCount),
+    [filteredItems, visibleCount]
+  );
 
   // stable context value
   const subCategoryContextValue = useCallback((id) => handleSubCategory(id), [handleSubCategory]);
@@ -510,10 +538,10 @@ export default function HomePage() {
             flexWrap: "wrap",
             gap: { xs: 2, sm: 3, md: 4, lg: 5 }
           }}>
-            {loading ? (
-                <Box sx={{ width: "100%", display: "flex", alignItems:"flex-start",flexDirection:"column" ,gap:2}}>
-                  <CategorySkeleton />
-                  <CategorySkeleton />
+            {productsLoading && !isSub ? (
+              <Box sx={{ width: "100%", display: "flex", alignItems: "flex-start", flexDirection: "column", gap: 2 }}>
+                <CategorySkeleton />
+                <CategorySkeleton />
               </Box>
             ) : filteredItems.length === 0 ? (
               <Box sx={{ width: '100%', textAlign: 'center', py: 4, color: 'text.secondary' }}>
@@ -522,28 +550,23 @@ export default function HomePage() {
                 </Typography>
               </Box>
             ) : (
-              // decide whether to virtualize
-              (FixedSizeList && filteredItems.length >= VIRTUALIZE_THRESHOLD) ? (
-                <Box sx={{ width: '100%' }}>
-                  <FixedSizeList
-                    height={Math.min(600, window.innerHeight - 300)}
-                    itemCount={filteredItems.length}
-                    itemSize={100} // adjust according to your item height
-                    width={'100%'}
-                  >
-                    {renderItem}
-                  </FixedSizeList>
-                </Box>
-              ) : (
-                filteredItems.map((item) => (
-                  <Suspense key={item.id ?? item.name} fallback={<CategorySkeleton/>}>
+              <>
+                {visibleItems.map((item) => (
+                  <Suspense key={item.id ?? item.name} fallback={<CategorySkeleton />}>
                     {item.is_sub_category
                       ? <RestaurantItem addItem={addItem} item={item} />
                       : <ProductItem item={item} />
                     }
                   </Suspense>
-                ))
-              )
+                ))}
+                {visibleCount < filteredItems.length && (
+                  <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', py: 2 }}>
+                    <Button variant="outlined" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
+                      Show more
+                    </Button>
+                  </Box>
+                )}
+              </>
             )}
           </Box>
         </Box>
