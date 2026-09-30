@@ -1,158 +1,163 @@
-import { ShoppingCartOutlined, Star } from "@mui/icons-material";
-import { Box, Button, Typography, Card, CardContent, CardMedia } from "@mui/material";
+import { memo, useCallback } from "react";
+import { Add, Star } from "@mui/icons-material";
+import { Box, Card, CardMedia, IconButton, Typography } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import AmountControl from "./AmountControl";
 import { useCart } from "./CartFunc";
-import { useNavigate } from "react-router-dom";
+import { brand } from "./brand";
 
-
-function ProductItem({item}) {
-  const { addToCart ,isItemInCart} = useCart();
-  const itemExists = isItemInCart(item.id);
+const ProductItem = memo(function ProductItem({ item }) {
+  const { addToCart, isItemInCart } = useCart();
+  const inCart = isItemInCart(item.id);
   const navigate = useNavigate();
-  const url = `product-detail/${item.slug}`
-  
-  function hanleProductDetail(){
-    navigate(url)
-  }
 
+  const openDetail = useCallback(
+    () => navigate(`/product-detail/${item.slug}`),
+    [navigate, item.slug]
+  );
 
-  function handleAddToCart(e, item) {
+  const handleAdd = (e) => {
     e.stopPropagation();
     addToCart(item);
-  }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && e.target === e.currentTarget) openDetail();
+  };
 
   return (
-    <Card 
-      onClick={hanleProductDetail}
+    <Card
+      role="link"
+      tabIndex={0}
+      onClick={openDetail}
+      onKeyDown={handleKeyDown}
+      elevation={0}
       sx={{
-        backgroundColor: "#fff",
-        borderRadius: 3,
-        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-        transition: "all 0.3s ease-in-out",
-        overflow: "hidden",
-        height: "100%",
+        position: "relative",
         display: "flex",
         flexDirection: "column",
-        width: { xs: "160px", sm: "180px", md: "220px", lg: "240px" },
-        flex: "1 1 auto",
-        minWidth: "160px",
-        maxWidth: "280px",
+        width: "100%",
+        minWidth: 0,
+        cursor: "pointer",
+        backgroundColor: brand.card,
+        border: `1px solid ${brand.line}`,
+        borderRadius: `${brand.radius}px`,
+        transition: "border-color 0.2s, box-shadow 0.2s",
         "&:hover": {
-          transform: "translateY(-4px)",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-          cursor:"pointer"
+          borderColor: brand.primary,
+          boxShadow: "0 6px 20px rgba(22,26,35,0.08)",
+        },
+        "&:focus-visible": {
+          outline: `3px solid ${brand.tint}`,
+          borderColor: brand.primary,
         },
       }}
     >
+      {item.rate != null && item.rate !== "" && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 16,
+            left: 16,
+            zIndex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 0.25,
+            px: 0.9,
+            py: 0.25,
+            borderRadius: 999,
+            backgroundColor: "rgba(255,255,255,0.92)",
+          }}
+        >
+          <Star sx={{ color: "#F5A623", fontSize: 15 }} />
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: brand.ink }}>
+            {item.rate}
+          </Typography>
+        </Box>
+      )}
+
       <Box
         sx={{
-          position: "absolute",
-          top: 12,
-          right: 12,
-          backgroundColor: "rgba(255,255,255,0.9)",
-          borderRadius: 2,
-          px: 1,
-          py: 0.5,
-          display: "flex",
-          alignItems: "center",
-          gap: 0.5,
-          backdropFilter: "blur(10px)",
-          zIndex: 1,
+          m: 1,
+          p: 1,
+          aspectRatio: "4 / 3",
+          borderRadius: `${brand.radius - 4}px`,
+          backgroundColor: brand.bg,
         }}
       >
-        <Star sx={{ color: "gold", fontSize: 18 }} />
-        <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{item.rate}</Typography>
-      </Box>
-
-      <Box sx={{ p: 2, pb: 1, flexShrink: 0 }}>
         <CardMedia
           component="img"
-          sx={{
-            width: "100%",
-            height: { xs: 100, sm: 120, md: 140 },
-            objectFit: "contain",
-          }}
-          image={item.images?.[0]?.image || '/default-image.jpg'}
-          alt="Product image"
+          loading="lazy"
+          decoding="async"
+          image={item.images?.[0]?.image || "/default-image.jpg"}
+          alt={item.name || "Product image"}
+          sx={{ width: "100%", height: "100%", objectFit: "contain" }}
         />
       </Box>
 
-      <CardContent sx={{ 
-        p: 1.5, 
-        pt: 1, 
-        flexGrow: 1, 
-        display: "flex", 
-        flexDirection: "column",
-        "&:last-child": { pb: 2 }
-      }}>
-
-        <Typography 
-          sx={{ 
-            fontSize: { xs: 16, sm: 17, md: 18 }, 
+      <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, px: 1.5, pt: 0.5, pb: 1.5 }}>
+        <Typography
+          sx={{
+            fontSize: { xs: 15, sm: 16 },
             fontWeight: 700,
-            lineHeight: 1.2,
-            minHeight: { xs: "28px", sm: "32px" }
+            lineHeight: 1.3,
+            color: brand.ink,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            minHeight: "2.6em",
           }}
         >
           {item.name}
         </Typography>
 
-        <Typography 
-          sx={{ 
-            fontSize: { xs: 13, sm: 14, md: 15 },
-            color: "text.secondary",
-            mb: 1
-          }}
-        >
-          {item.location}
-        </Typography>
-
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            alignItems: "center", 
-            justifyContent: "space-between",
-            mt: "auto",
-            gap: 1
-          }}
-        >
-          <Typography 
-            sx={{ 
-              fontSize: { xs: 16, sm: 17, md: 18 }, 
-              fontWeight: 800,
-              color: "primary.main",
-              flexShrink: 0
-            }}
-          >
-            {item.price} ETB
+        {item.location && (
+          <Typography noWrap sx={{ fontSize: 13, color: brand.muted, mt: 0.25 }}>
+            {item.location}
           </Typography>
-          {itemExists ? (
+        )}
+
+        <Box
+          sx={{
+            mt: "auto",
+            pt: 1.25,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+          }}
+        >
+          <Typography sx={{ fontSize: { xs: 16, sm: 17 }, fontWeight: 800, color: brand.ink, flexShrink: 0 }}>
+            {item.price}
+            <Box component="span" sx={{ ml: 0.5, fontSize: 12, fontWeight: 600, color: brand.muted }}>
+              ETB
+            </Box>
+          </Typography>
+
+          {inCart ? (
             <div onClick={(e) => e.stopPropagation()}>
-              <AmountControl item={item} IconSize={"18px"}/>
+              <AmountControl item={item} IconSize="18px" />
             </div>
           ) : (
-            <Button 
-              endIcon={<ShoppingCartOutlined sx={{ fontSize: 18 }} />} 
-              variant="contained" 
-              onClick={(e) => handleAddToCart(e, item)}
+            <IconButton
+              aria-label={`Add ${item.name} to cart`}
+              onClick={handleAdd}
               sx={{
-                textTransform: "capitalize",
-                borderRadius: 2,
-                px: { xs: 1.5, sm: 2 },
-                fontWeight: 600,
-                minWidth: "auto",
-                fontSize: { xs: 12, sm: 13 }
+                width: 36,
+                height: 36,
+                color: "#fff",
+                backgroundColor: brand.primary,
+                "&:hover": { backgroundColor: brand.primaryDark },
               }}
             >
-              Add
-            </Button>
+              <Add fontSize="small" />
+            </IconButton>
           )}
         </Box>
-      </CardContent>
+      </Box>
     </Card>
   );
-}
-
-
+});
 
 export default ProductItem;

@@ -1,107 +1,84 @@
-import { Typography, Box } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import { alpha, styled } from '@mui/material/styles';
-import React from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { IconButton, InputAdornment, InputBase } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import CloseIcon from "@mui/icons-material/Close";
+import { brand } from "./brand";
 
-const Search = styled('div')(({ theme }) => ({
-  position: 'relative',
-  borderRadius: '25px',
-  backgroundColor: "#DEDEDE",
-  '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
-  },
-  marginLeft: 0,
-  width: '100%',
-  maxWidth: 600,
-  overflowX:"auto",
-  '&::-webkit-scrollbar': { display: 'none' }, 
-  scrollbarWidth: 'none', // Firefox,
-  [theme.breakpoints.up('sm')]: {
-    marginLeft: theme.spacing(1),
-    width: 'auto',
-  },
-}));
+/**
+ * The input keeps its own state so typing is always instant.
+ * Only the debounced value is sent up through `onSearchChange`.
+ */
+function SearchComponent({
+  onSearchChange,
+  placeholder = "Search anything…",
+  delay = 250,
+}) {
+  const [value, setValue] = useState("");
+  const timerRef = useRef(null);
 
-const SearchIconWrapper = styled('div')(({ theme }) => ({
-  padding: theme.spacing(0, 2),
-  height: '100%',
-  position: 'absolute',
-  pointerEvents: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 2,
-}));
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
-const StyledInputBase = styled('input')(({ theme }) => ({
-  color: 'inherit',
-  width: '100%',
-  position: 'relative',
-  backgroundColor: 'transparent',
-  border: 'none',
-  outline: 'none',
-  padding: '16px',
-  paddingLeft: '60px',
-  fontSize: '20px',
-  zIndex: 1,
-}));
+  const emit = useCallback(
+    (next, immediate = false) => {
+      clearTimeout(timerRef.current);
+      if (immediate) {
+        onSearchChange?.(next);
+        return;
+      }
+      timerRef.current = setTimeout(() => onSearchChange?.(next), delay);
+    },
+    [onSearchChange, delay]
+  );
 
-const PlaceholderWrapper = styled(Box)(({ theme }) => ({
-  position: 'absolute',
-  top: '50%',
-  left: '60px',
-  transform: 'translateY(-50%)',
-  pointerEvents: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  zIndex: 0,
-  overflowX:"auto"
-}));
+  const handleChange = (e) => {
+    setValue(e.target.value);
+    emit(e.target.value);
+  };
 
-
-function SearchComponent() {
-  const [searchValue, setSearchValue] = React.useState('');
+  const handleClear = () => {
+    setValue("");
+    emit("", true);
+  };
 
   return (
-    <Search sx={{ width: '100%', maxWidth: 600, backgroundColor: "#DEDEDE" }}>
-      <SearchIconWrapper>
-        <SearchIcon sx={{ fontSize: 44 }} />
-      </SearchIconWrapper>
-      
-      <StyledInputBase
-        value={searchValue}
-        onChange={(e) => setSearchValue(e.target.value)}
-        placeholder=" " 
-        inputProps={{ 'aria-label': 'search' }}
-      />
-      
-      {!searchValue && (
-        <PlaceholderWrapper>
-          <Typography 
-            component="span" 
-            sx={{ 
-              fontSize: '20px', 
-              color: 'black',
-              fontWeight: 550,
-            }}
-          >
-            Search
-          </Typography>
-          <Typography 
-            component="span" 
-            sx={{ 
-              fontSize: '20px', 
-              color: 'gray',
-              textWrap:"nowrap"
-            }}
-          >
-            Anything…
-          </Typography>
-        </PlaceholderWrapper>
-      )}
-    </Search>
+    <InputBase
+      fullWidth
+      value={value}
+      onChange={handleChange}
+      placeholder={placeholder}
+      inputProps={{ "aria-label": "Search", enterKeyHint: "search" }}
+      startAdornment={
+        <InputAdornment position="start" sx={{ color: brand.muted, mr: 1.5 }}>
+          <SearchIcon />
+        </InputAdornment>
+      }
+      endAdornment={
+        value ? (
+          <InputAdornment position="end">
+            <IconButton size="small" aria-label="Clear search" onClick={handleClear}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </InputAdornment>
+        ) : null
+      }
+      sx={{
+        width: "100%",
+        maxWidth: 640,
+        px: 2,
+        py: 0.75,
+        fontSize: 17,
+        color: brand.ink,
+        backgroundColor: brand.card,
+        border: `1px solid ${brand.line}`,
+        borderRadius: `${brand.radius}px`,
+        transition: "border-color 0.2s, box-shadow 0.2s",
+        "&.Mui-focused": {
+          borderColor: brand.primary,
+          boxShadow: `0 0 0 4px ${brand.tint}`,
+        },
+      }}
+    />
   );
 }
 
-export default SearchComponent
+export default memo(SearchComponent);

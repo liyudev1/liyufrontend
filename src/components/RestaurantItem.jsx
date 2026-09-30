@@ -1,74 +1,217 @@
+import { memo, useCallback, useContext, useState } from "react";
 import { Fastfood, LocationOn } from "@mui/icons-material";
-import { Box, Button, Card, CardContent, Typography, CircularProgress } from "@mui/material";
-import { useContext, useState } from "react";
+import { Box, Button, Card, CircularProgress, Typography } from "@mui/material";
 import { SubCategoryChangeContext } from "./HomePage";
+import { brand } from "./brand";
 
-
-function RestaurantItem({ item, addItem }) {
+const RestaurantItem = memo(function RestaurantItem({ item, addItem }) {
   const handleSubCategory = useContext(SubCategoryChangeContext);
   const [loading, setLoading] = useState(false);
-  console.log(item.image)
-  const handleClick = async (item_id, label) => {
-    if (loading) return; 
-    setLoading(true);
 
+  const handleClick = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
     try {
-      await handleSubCategory(item_id); 
-      await addItem(item_id, label);
+      // handleSubCategory returns false when loading the menu failed
+      const ok = await handleSubCategory(item.id);
+      if (ok) await addItem(item.id, item.name);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, handleSubCategory, addItem, item.id, item.name]);
 
   return (
-    <Card sx={{ maxWidth: 400, width: "100%", borderRadius: 2, boxShadow: 1, border: '1px solid #e0e0e0', position: "relative", "&:hover": { boxShadow: 3, borderColor: "primary.light" } }}>
-      <CardContent sx={{ p: 1.5 }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <Box sx={{ width: { xs: "95%", md: "90%" }, height: { xs: 180, sm: 200 }, borderRadius: 2, overflow: "hidden", alignSelf: "center", backgroundColor: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <img style={{ width: "100%", height: "100%", objectFit: "cover" }} src={item.image?.replace("http://", "https://")} alt={item.name} />
-          </Box>
+    <Card
+      elevation={0}
+      sx={{
+        // full width on phones, two grid columns on larger screens
+        gridColumn: { xs: "1 / -1", sm: "span 2" },
+        minWidth: 0,
+        backgroundColor: brand.card,
+        border: `1px solid ${brand.line}`,
+        borderRadius: `${brand.radius}px`,
+        transition: "border-color 0.2s, box-shadow 0.2s",
+        "&:hover": {
+          borderColor: brand.primary,
+          boxShadow: "0 6px 20px rgba(22,26,35,0.08)",
+        },
+      }}
+    >
+      <Box
+        sx={{
+          m: 1,
+          aspectRatio: { xs: "16 / 9", sm: "2 / 1" },
+          borderRadius: `${brand.radius - 4}px`,
+          overflow: "hidden",
+          backgroundColor: brand.bg,
+        }}
+      >
+        {item.image && (
+          <img
+            src={item.image.replace("http://", "https://")}
+            alt={item.name}
+            loading="lazy"
+            decoding="async"
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        )}
+      </Box>
 
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
-                <Typography sx={{ fontWeight: 600, fontSize: 25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</Typography>
-                {item.note && <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}><LocationOn sx={{ fontSize: 16, color: "GrayText" }} /><Typography sx={{ fontSize: 15, color: "GrayText" }}>{item.note}</Typography></Box>}
-                {item.type && <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}><Fastfood sx={{ fontSize: 16, color: "#FF6600" }} /><Typography sx={{ fontSize: 15, color: "GrayText" }}>{item.type}</Typography></Box>}
-              </Box>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, px: 2, pt: 0.5, pb: 2 }}>
+        <Box sx={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <Typography noWrap sx={{ fontSize: 20, fontWeight: 700, color: brand.ink }}>
+            {item.name}
+          </Typography>
 
-              <Button
-                size="medium"
-                variant="contained"
-                onClick={() => handleClick(item.id, item.name)}
-                disabled={loading}
-                sx={{
-                  "&:disabled": { background: "#e0e0e0", color: "#9e9e9e", boxShadow: "none" },
-                  textTransform: "capitalize",
-                  borderRadius: 10,
-                  fontWeight: 550,
-                  px: 2,
-                  py: 1,
-                  fontSize: 16,
-                  position: "absolute",
-                  bottom: 12,
-                  right: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 1
-                }}
-              >
-                {loading && <CircularProgress size={20} color="inherit" />}
-                {!loading && "View Menu"}
-              </Button>
+          {item.note && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: brand.muted }}>
+              <LocationOn sx={{ fontSize: 16 }} />
+              <Typography noWrap sx={{ fontSize: 14 }}>{item.note}</Typography>
             </Box>
-          </Box>
+          )}
+
+          {item.type && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: brand.muted }}>
+              <Fastfood sx={{ fontSize: 16, color: brand.primary }} />
+              <Typography noWrap sx={{ fontSize: 14 }}>{item.type}</Typography>
+            </Box>
+          )}
         </Box>
-      </CardContent>
+
+        <Button
+          variant="contained"
+          disableElevation
+          onClick={handleClick}
+          disabled={loading}
+          sx={{
+            flexShrink: 0,
+            minWidth: 116,
+            px: 2.5,
+            py: 1,
+            borderRadius: 999,
+            fontSize: 15,
+            fontWeight: 600,
+            textTransform: "none",
+            backgroundColor: brand.primary,
+            "&:hover": { backgroundColor: brand.primaryDark },
+            "&.Mui-disabled": { backgroundColor: brand.line, color: brand.muted },
+          }}
+        >
+          {loading ? <CircularProgress size={20} color="inherit" /> : "View menu"}
+        </Button>
+      </Box>
     </Card>
   );
-}
+});
+
+export default RestaurantItem;import { memo, useCallback, useContext, useState } from "react";
+import { Fastfood, LocationOn } from "@mui/icons-material";
+import { Box, Button, Card, CircularProgress, Typography } from "@mui/material";
+import { SubCategoryChangeContext } from "./HomePage";
+import { brand } from "./brand";
+
+const RestaurantItem = memo(function RestaurantItem({ item, addItem }) {
+  const handleSubCategory = useContext(SubCategoryChangeContext);
+  const [loading, setLoading] = useState(false);
+
+  const handleClick = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      // handleSubCategory returns false when loading the menu failed
+      const ok = await handleSubCategory(item.id);
+      if (ok) await addItem(item.id, item.name);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, handleSubCategory, addItem, item.id, item.name]);
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        // full width on phones, two grid columns on larger screens
+        gridColumn: { xs: "1 / -1", sm: "span 2" },
+        minWidth: 0,
+        backgroundColor: brand.card,
+        border: `1px solid ${brand.line}`,
+        borderRadius: `${brand.radius}px`,
+        transition: "border-color 0.2s, box-shadow 0.2s",
+        "&:hover": {
+          borderColor: brand.primary,
+          boxShadow: "0 6px 20px rgba(22,26,35,0.08)",
+        },
+      }}
+    >
+      <Box
+        sx={{
+          m: 1,
+          aspectRatio: { xs: "16 / 9", sm: "2 / 1" },
+          borderRadius: `${brand.radius - 4}px`,
+          overflow: "hidden",
+          backgroundColor: brand.bg,
+        }}
+      >
+        {item.image && (
+          <img
+            src={item.image.replace("http://", "https://")}
+            alt={item.name}
+            loading="lazy"
+            decoding="async"
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        )}
+      </Box>
+
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, px: 2, pt: 0.5, pb: 2 }}>
+        <Box sx={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <Typography noWrap sx={{ fontSize: 20, fontWeight: 700, color: brand.ink }}>
+            {item.name}
+          </Typography>
+
+          {item.note && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: brand.muted }}>
+              <LocationOn sx={{ fontSize: 16 }} />
+              <Typography noWrap sx={{ fontSize: 14 }}>{item.note}</Typography>
+            </Box>
+          )}
+
+          {item.type && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: brand.muted }}>
+              <Fastfood sx={{ fontSize: 16, color: brand.primary }} />
+              <Typography noWrap sx={{ fontSize: 14 }}>{item.type}</Typography>
+            </Box>
+          )}
+        </Box>
+
+        <Button
+          variant="contained"
+          disableElevation
+          onClick={handleClick}
+          disabled={loading}
+          sx={{
+            flexShrink: 0,
+            minWidth: 116,
+            px: 2.5,
+            py: 1,
+            borderRadius: 999,
+            fontSize: 15,
+            fontWeight: 600,
+            textTransform: "none",
+            backgroundColor: brand.primary,
+            "&:hover": { backgroundColor: brand.primaryDark },
+            "&.Mui-disabled": { backgroundColor: brand.line, color: brand.muted },
+          }}
+        >
+          {loading ? <CircularProgress size={20} color="inherit" /> : "View menu"}
+        </Button>
+      </Box>
+    </Card>
+  );
+});
 
 export default RestaurantItem;
