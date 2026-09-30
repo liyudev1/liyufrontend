@@ -33,6 +33,7 @@ const ProductItem = memo(function ProductItem({ item }) {
       onKeyDown={handleKeyDown}
       elevation={0}
       sx={{
+        boxSizing: "border-box",
         position: "relative",
         display: "flex",
         flexDirection: "column",

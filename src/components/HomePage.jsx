@@ -188,7 +188,17 @@ export function Header() {
         color: brand.ink,
       }}
     >
-      <Toolbar sx={{ height: 64, gap: 1.5, maxWidth: 1200, width: "100%", mx: "auto" }}>
+      <Toolbar
+        sx={{
+          boxSizing: "border-box",
+          height: 64,
+          gap: { xs: 1, sm: 1.5 },
+          maxWidth: 1200,
+          width: "100%",
+          mx: "auto",
+          px: { xs: 1.5, sm: 3 },
+        }}
+      >
         {pathname !== "/" && (
           <IconButton onClick={handleGoBack} aria-label="Go back" edge="start">
             <ArrowBack sx={{ color: brand.ink }} />
@@ -447,6 +457,7 @@ export default function HomePage() {
   return (
     <Box
       sx={{
+        boxSizing: "border-box",
         height: "100dvh",
         width: "100%",
         backgroundColor: brand.bg,
@@ -461,6 +472,7 @@ export default function HomePage() {
       <Box
         component="main"
         sx={{
+          boxSizing: "border-box",
           flex: 1,
           width: "100%",
           maxWidth: 1200,
