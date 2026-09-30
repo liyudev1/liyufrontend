@@ -1,25 +1,60 @@
+import { memo } from "react";
 import { Add, RemoveRounded } from "@mui/icons-material";
-import { Box, Button, Typography } from "@mui/material";
-
+import { Box, IconButton, Typography } from "@mui/material";
 import { useCart } from "./CartFunc";
+import { brand } from "./brand";
 
-function AmountControl({item,IconSize}){
-    const {decreaseItem,getItemQuantity,addToCart} = useCart()
-    const itemsQuantity = getItemQuantity(item.id)
-    return (
-        <Box sx={{
-            display:"flex",
-            alignItems:"center",
-            gap:{xs:0.2,md:1}
-        }}>
-            <Button onClick={()=>decreaseItem(item.id)} size="small" sx={{backgroundColor:"red",minWidth: "auto",borderRadius: 2,}} variant="contained">
-                <RemoveRounded fontSize={IconSize} />
-            </Button>
-            <Typography sx={{fontSize:{xs:18,md:22},fontWeight:600}}>{itemsQuantity}</Typography>
-            <Button onClick={()=>addToCart(item)} size="small" variant="contained" sx={{backgroundColor:"red",minWidth: "auto",borderRadius: 2,}}>
-                <Add fontSize={IconSize}/>
-            </Button>
-        </Box>
-    )
+// IconSize is a pixel size such as "18px" or "20px". The old code passed it to
+// `fontSize`, which only accepts "small" / "medium" / "large", so it was ignored.
+function AmountControl({ item, IconSize }) {
+  const { decreaseItem, getItemQuantity, addToCart } = useCart();
+  const quantity = getItemQuantity(item.id);
+
+  const iconPx = parseInt(IconSize, 10) || 22;
+  const buttonPx = iconPx + 8;
+
+  return (
+    <Box
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.25,
+        p: 0.25,
+        borderRadius: 999,
+        backgroundColor: brand.card,
+        border: `1px solid ${brand.line}`,
+      }}
+    >
+      <IconButton
+        aria-label="Decrease quantity"
+        onClick={() => decreaseItem(item.id)}
+        sx={{ width: buttonPx, height: buttonPx, color: brand.ink, "&:hover": { backgroundColor: brand.bg } }}
+      >
+        <RemoveRounded sx={{ fontSize: iconPx }} />
+      </IconButton>
+
+      <Typography
+        aria-live="polite"
+        sx={{ minWidth: 20, textAlign: "center", fontSize: 15, fontWeight: 700, color: brand.ink }}
+      >
+        {quantity}
+      </Typography>
+
+      <IconButton
+        aria-label="Increase quantity"
+        onClick={() => addToCart(item)}
+        sx={{
+          width: buttonPx,
+          height: buttonPx,
+          color: "#fff",
+          backgroundColor: brand.primary,
+          "&:hover": { backgroundColor: brand.primaryDark },
+        }}
+      >
+        <Add sx={{ fontSize: iconPx }} />
+      </IconButton>
+    </Box>
+  );
 }
-export default AmountControl
+
+export default memo(AmountControl);

@@ -511,6 +511,7 @@ export default function HomePage() {
           />
 
           <CustomizedBreadcrumbs
+            setIsSub={setIsSub}
             setCategory={setCategory}
             category={category}
             clearList={clearList}

@@ -1,65 +1,73 @@
-import * as React from 'react';
-import { emphasize, styled } from '@mui/material/styles';
-import Breadcrumbs from '@mui/material/Breadcrumbs';
-import Chip from '@mui/material/Chip';
-import { Restaurant } from '@mui/icons-material';
-import { SubCategoryChangeContext } from './HomePage';
-import useListReducer from './CategoryNavigationReducer';
+import { memo, useContext } from "react";
+import { Box, Chip } from "@mui/material";
+import { ChevronRight, Restaurant } from "@mui/icons-material";
+import { SubCategoryChangeContext } from "./HomePage";
+import { brand } from "./brand";
 
-const StyledBreadcrumb = styled(Chip)(({ theme }) => {
-  return {
-    backgroundColor: theme.palette.grey[100],
-    height: theme.spacing(3),
-    color: (theme.vars || theme).palette.text.primary,
-    fontWeight: theme.typography.fontWeightRegular,
-    '&:hover, &:focus': {
-      backgroundColor: emphasize(theme.palette.grey[100], 0.06),
-      ...theme.applyStyles('dark', {
-        backgroundColor: emphasize(theme.palette.grey[800], 0.06),
-      }),
-    },
-    '&:active': {
-      boxShadow: theme.shadows[1],
-      backgroundColor: emphasize(theme.palette.grey[100], 0.12),
-      ...theme.applyStyles('dark', {
-        backgroundColor: emphasize(theme.palette.grey[800], 0.12),
-      }),
-    },
-    ...theme.applyStyles('dark', {
-      backgroundColor: theme.palette.grey[800],
-    }),
-  };
-}); 
+const chipSx = (current) => ({
+  flexShrink: 0,
+  height: 32,
+  borderRadius: 999,
+  fontSize: 14,
+  fontWeight: 600,
+  color: current ? brand.primaryDark : brand.ink,
+  backgroundColor: current ? brand.tint : brand.card,
+  border: `1px solid ${current ? brand.primary : brand.line}`,
+  "&:hover": { backgroundColor: current ? brand.tint : brand.bg },
+});
 
+// `setIsSub` is now passed in from HomePage. The old code used it without
+// receiving it, so clicking the first breadcrumb threw a ReferenceError.
+function CustomizedBreadcrumbs({ clearList, removeItemsAfter, getAllItems, setIsSub }) {
+  const handleSubCategory = useContext(SubCategoryChangeContext);
+  const items = getAllItems();
 
-export default function CustomizedBreadcrumbs({setCategory,category,clearList,removeItemsAfter,getAllItems}) {
-  const handleSubCategory = React.useContext(SubCategoryChangeContext)
-  function handleChange(item){
-    removeItemsAfter(item.item_id)
-    handleSubCategory(item.item_id)
+  // Nothing to navigate back through while the person is on the main list
+  if (!items.length) return null;
+
+  function handleRoot() {
+    clearList();
+    setIsSub?.(false);
   }
-  function handleClickAll(category_name){
-    let c_n = category.toLowerCase() === category?category_name.toUpperCase():category_name.toLowerCase()
-    setCategory(c_n)
-    clearList()
-    setIsSub(false)
+
+  function handleChange(item) {
+    removeItemsAfter(item.item_id);
+    handleSubCategory(item.item_id);
   }
-  const items = getAllItems()
-  console.log("items",items)
+
   return (
-    <div style={{marginBottom:"30px"}} role="presentation">
-      <Breadcrumbs aria-label="breadcrumb">
-        <StyledBreadcrumb
-          onClick={()=>handleClickAll(category)}
-          label="Resaurants"
-          icon={<Restaurant fontSize="small" />}
-        />
-        {items.map((item,index)=>{
-                  return <StyledBreadcrumb key={index}
-                  label={item.label} onClick={()=>handleChange(item)}
-                />
-        })}
-        </Breadcrumbs>
-    </div>
+    <Box
+      component="nav"
+      aria-label="breadcrumb"
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: 0.5,
+        mb: 2.5,
+        overflowX: "auto",
+        "&::-webkit-scrollbar": { display: "none" },
+        scrollbarWidth: "none",
+      }}
+    >
+      <Chip clickable onClick={handleRoot} icon={<Restaurant fontSize="small" />} label="Restaurants" sx={chipSx(false)} />
+
+      {items.map((item, index) => {
+        const isLast = index === items.length - 1;
+        return (
+          <Box key={item.item_id ?? index} sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+            <ChevronRight sx={{ fontSize: 20, color: brand.muted }} />
+            <Chip
+              label={item.label}
+              aria-current={isLast ? "page" : undefined}
+              clickable={!isLast}
+              onClick={isLast ? undefined : () => handleChange(item)}
+              sx={chipSx(isLast)}
+            />
+          </Box>
+        );
+      })}
+    </Box>
   );
 }
+
+export default memo(CustomizedBreadcrumbs);

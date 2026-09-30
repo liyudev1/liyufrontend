@@ -1,572 +1,421 @@
-import {  Schedule, ShoppingCartCheckout } from "@mui/icons-material";
-import { 
-    Box, 
-    Chip, 
-    Stack, 
-    Typography, 
-    Card,
-    CardContent,
-    Button,
-    useTheme,
-    useMediaQuery,
-    CircularProgress,
-    Container
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Skeleton,
+  Snackbar,
+  Typography,
 } from "@mui/material";
+import { Schedule, ShoppingCartCheckout } from "@mui/icons-material";
+import api from "../api";
 import { Header } from "./HomePage";
 import BottomNav from "./BottomNav";
-import { useEffect, useState } from "react";
-import api from "../api";
+import { brand } from "./brand";
 
-function Order({ item,socket }) {
-    const [cancelLoad,setCancelLoad] = useState(false)
-    const [isActionDisabled, setIsActionDisabled] = useState();
+const TABS = ["All", "pending", "confirmed", "delivered", "cancelled"];
+const LOCKED_STATUSES = new Set(["confirmed", "delivered", "cancelled"]); // can't be cancelled any more
+const CANCEL_TIMEOUT_MS = 10000; // stop the spinner if the server never answers
+const RECONNECT_DELAY_MS = 3000;
 
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    useEffect(()=>{
-        setIsActionDisabled(item.status.toLowerCase() === "confirmed" || 
-        item.status.toLowerCase() === "delivered" || 
-        item.status.toLowerCase() === "cancelled")
-    },[item.status])
+const STATUS_STYLE = {
+  pending: { bg: "#F1F2F4", color: "#4B5563" },
+  confirmed: { bg: "#FFF1D6", color: "#8A5A00" },
+  delivered: { bg: "#DDF5E5", color: "#13693A" },
+  cancelled: { bg: "#FDE4E2", color: "#B42318" },
+};
+const DEFAULT_STATUS_STYLE = { bg: brand.tint, color: brand.primaryDark };
 
-    const formatSimpleDateTime = (isoString) => {
-        const date = new Date(isoString);
-        return date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
-    };
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
 
-    const getStatusColor = (status) => {
-        const statusLower = status.toLowerCase();
-        switch(statusLower) {
-            case 'delivered': return 'success';
-            case 'confirmed': return 'warning';
-            case 'pending': return 'default';
-            case 'cancelled': return 'error';
-            default: return 'primary';
-        }
-    };
-
-    const getStatusVariant = (status) => {
-        const statusLower = status.toLowerCase();
-        return  statusLower === 'pending' ? 'outlined': 'filled' ;
-    };
-
-    async function handleCancel(e) {
-        if (!item?.id) {
-            console.error("No item ID provided");
-            return;
-        }
-        
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-            console.error("WebSocket is not connected");
-            return;
-        }
-        
-        try {
-            setCancelLoad(true)
-            const data = {
-                status: "cancelled",
-                order_id: item.id,
-            };
-            socket.send(
-                JSON.stringify({
-                    data: data,
-                    type: "cancel_order"
-                })
-            );
-            setIsActionDisabled(true)
-            socket.onmessage = (event) => {
-                setCancelLoad(false)
-            }
-        } catch (error) {
-            console.error("API call failed:", error);
-            throw error;
-        }
-
-    }
-
-    return (
-        <Card 
-            sx={{ 
-                width: "100%", 
-                borderRadius: 3, 
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                backgroundColor:"white",
-                transition: 'all 0.3s ease-in-out',
-                '&:hover': {
-                    boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
-                    transform: 'translateY(-2px)'
-                },
-                border: `1px solid ${theme.palette.divider}`,
-                overflow: 'hidden'
-            }}
-        >
-            <Stack sx={{ 
-                background: 'white', 
-                p: { xs: 0.8, md: 1 },
-                gap: 1.5,         
-            }}>
-                <Box sx={{ 
-                    display: "flex", 
-                    alignItems: "flex-start", 
-                    justifyContent: "space-between", 
-                }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: 'wrap' }}>
-                        <Box sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            backgroundColor: theme.palette.primary.main,
-                            color: 'white',
-                            px: 1.5,
-                            py: 0.5,
-                            borderRadius: 2
-                        }}>
-                            <ShoppingCartCheckout fontSize="small" />
-                            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-                                {item.item_count} {item.item_count === 1 ? 'Item' : 'Items'}
-                            </Typography>
-                        </Box>
-                        
-                        <Typography 
-                            variant="caption" 
-                            sx={{ 
-                                color: 'text.secondary',
-                                fontWeight: 500,
-                                fontSize: 12
-                            }}
-                        >
-                            #{item.order_number}
-                        </Typography>
-                    </Box>
-                    <Chip 
-                        size={isMobile ? "small" : "medium"}
-                        label={item.status} 
-                        color={getStatusColor(item.status)}
-                        variant={getStatusVariant(item.status)}
-                        sx={{
-                            fontWeight: 600,
-                            textTransform: 'capitalize',
-                            minWidth: 90
-                        }}
-                    />
-                </Box>
-
-                <Box sx={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: 2,
-                    borderRadius: 2,
-                }}>
-                    <Typography variant="h6" fontSize={isMobile ? 16 : 18} fontWeight={700} color="text.primary">
-                        Total Amount:
-                    </Typography>
-                    <Typography fontSize={isMobile ? 16 : 18} variant="h6" color="primary" fontWeight={800}>
-                        {item.total_price.toFixed(2)} ETB
-                    </Typography>
-                </Box>
-
-                <Box sx={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    justifyContent: "space-between",
-                    gap: 1,
-                }}>
-                    <Stack direction="row" spacing={1} width={isMobile ? '100%' : 'auto'}>
-                        <Button 
-                            variant="outlined"
-                            color="error"
-                            size={isMobile ? "small" : "medium"}
-                            disabled={isActionDisabled || cancelLoad}
-                            startIcon={
-                                cancelLoad ? (
-                                  <CircularProgress size={20} sx={{ color: 'inherit' }} />
-                                ) : (
-                                  null
-                                )
-                              }
-                            onClick={handleCancel}
-                            sx={{
-                                borderRadius: 2,
-                                fontWeight: 600,
-                                textTransform: 'none',
-                                minWidth: 80
-                            }}
-                        >
-                            {cancelLoad ? 'Cancling Order...' : "Cancel"}
-                        </Button>
-                        <Button 
-                            variant="contained"
-                            color="primary"
-                            size={isMobile ? "small" : "medium"}
-                            disabled
-                            sx={{
-                                borderRadius: 2,
-                                fontWeight: 600,
-                                textTransform: 'none',
-                                minWidth: 80
-                            }}
-                        >
-                            Pay Now
-                        </Button>
-                    </Stack>
-                    
-                    <Box sx={{ 
-                        display: "flex", 
-                        alignItems: "center", 
-                        gap: 1,
-                        width: isMobile ? '100%' : 'auto',
-                        justifyContent: 'flex-end'
-                    }}>
-                        <Schedule fontSize="small" color="action" />
-                        <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                            {formatSimpleDateTime(item.created_at)}
-                        </Typography>
-                    </Box>
-                </Box>
-            </Stack>
-        </Card>
-    );
+function formatDate(iso) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : dateFormatter.format(date);
 }
 
-function Tabs({ category, setCategory, tabList }) {
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    
-    const tabColors = {
-        activeBg: '#E31837',
-        activeText: '#FFFFFF',
-        inactiveBg: 'transparent',
-        inactiveText: '#666666',
-        inactiveBorder: '#E0E0E0',
-        hoverBg: '#FFF5F5',
-        containerBg: '#F8F8F8',
-    };
+const sortNewestFirst = (list) =>
+  [...list].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
 
-    function handleTabChange(category_name) {
-        setCategory(category_name);
-    }
+/* ---------------------------------- Order --------------------------------- */
 
-    return (
-        <Box 
-            sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                overflowX: "auto",
-                mb: 4,
-                p: 2,
-                borderRadius: 3,
-                mx: isMobile ? -2 : 0,
-                position: 'relative',
-                scrollBehavior: 'smooth',
-                '&::-webkit-scrollbar': { 
-                    height: 8,
-                    display: 'block',
-                    backgroundColor: 'transparent'
-                },
-                '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: theme.palette.divider,
-                    borderRadius: 4,
-                    '&:hover': {
-                        backgroundColor: theme.palette.action.hover,
-                    }
-                },
-                '&::-webkit-scrollbar-track': {
-                    backgroundColor: 'transparent'
-                },
-                ...(isMobile && {
-                    '&::-webkit-scrollbar': {
-                        display: 'none'
-                    },
-                    WebkitOverflowScrolling: 'touch'
-                })
-            }}
-        >
-            <Button 
-                variant="text"
-                onClick={() => handleTabChange("All")}
-                sx={{
-                    borderRadius: '24px',
-                    fontSize: isMobile ? '0.875rem' : '0.9375rem',
-                    textTransform: "capitalize",
-                    minWidth: 'auto',
-                    px: 3,
-                    py: 1,
-                    fontWeight: category === "All" ? 700 : 600,
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    whiteSpace: 'nowrap',
-                    border: category === "All" 
-                        ? `2px solid ${tabColors.activeBg}` 
-                        : `2px solid ${tabColors.inactiveBorder}`,
-                    backgroundColor: category === "All" 
-                        ? tabColors.activeBg 
-                        : tabColors.inactiveBg,
-                    color: category === "All" 
-                        ? tabColors.activeText 
-                        : tabColors.inactiveText,
-                    boxShadow: category === "All" 
-                        ? '0 4px 12px rgba(227, 24, 55, 0.2)' 
-                        : 'none',
-                    '&:hover': {
-                        backgroundColor: category === "All" 
-                            ? '#D10E2F'
-                            : tabColors.hoverBg,
-                        borderColor: category === "All" 
-                            ? '#D10E2F' 
-                            : theme.palette.primary.light,
-                        color: category === "All" 
-                            ? tabColors.activeText 
-                            : theme.palette.primary.main,
-                        transform: 'translateY(-2px)',
-                        boxShadow: category === "All" 
-                            ? '0 6px 16px rgba(227, 24, 55, 0.25)' 
-                            : '0 4px 12px rgba(0, 0, 0, 0.08)'
-                    },
-                    '&:active': {
-                        transform: 'translateY(0)',
-                        transition: 'transform 0.1s'
-                    }
-                }}
-            >
-                All
-            </Button>
-            
-            {tabList.map((tab, index) => {
-                const isActive = category === tab;
-                return (
-                    <Button
-                        onClick={() => handleTabChange(tab)}
-                        key={index}
-                        variant="text"
-                        sx={{
-                            borderRadius: '24px',
-                            fontSize: isMobile ? '0.875rem' : '0.9375rem',
-                            textTransform: "capitalize",
-                            minWidth: 'auto',
-                            px: 3,
-                            py: 1,
-                            fontWeight: isActive ? 700 : 600,
-                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                            whiteSpace: 'nowrap',
-                            border: isActive 
-                                ? `2px solid ${tabColors.activeBg}` 
-                                : `2px solid ${tabColors.inactiveBorder}`,
-                            backgroundColor: isActive 
-                                ? tabColors.activeBg 
-                                : tabColors.inactiveBg,
-                            color: isActive 
-                                ? tabColors.activeText 
-                                : tabColors.inactiveText,
-                            boxShadow: isActive 
-                                ? '0 4px 12px rgba(227, 24, 55, 0.2)' 
-                                : 'none',
-                            '&:hover': {
-                                backgroundColor: isActive 
-                                    ? '#D10E2F'
-                                    : tabColors.hoverBg,
-                                borderColor: isActive 
-                                    ? '#D10E2F' 
-                                    : theme.palette.primary.light,
-                                color: isActive 
-                                    ? tabColors.activeText 
-                                    : theme.palette.primary.main,
-                                transform: 'translateY(-2px)',
-                                boxShadow: isActive 
-                                    ? '0 6px 16px rgba(227, 24, 55, 0.25)' 
-                                    : '0 4px 12px rgba(0, 0, 0, 0.08)'
-                            },
-                            '&:active': {
-                                transform: 'translateY(0)',
-                                transition: 'transform 0.1s'
-                            }
-                        }}
-                    >
-                        {tab}
-                    </Button>
-                );
-            })}
+const Order = memo(function Order({ item, cancelling, onCancel }) {
+  const status = String(item.status || "").toLowerCase();
+  const statusStyle = STATUS_STYLE[status] || DEFAULT_STATUS_STYLE;
+  const locked = LOCKED_STATUSES.has(status);
+  const count = Number(item.item_count) || 0;
+
+  return (
+    <Box
+      component="article"
+      sx={{
+        boxSizing: "border-box",
+        minWidth: 0,
+        p: 2,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        backgroundColor: brand.card,
+        border: `1px solid ${brand.line}`,
+        borderRadius: `${brand.radius}px`,
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography noWrap sx={{ fontWeight: 700, fontSize: 17, color: brand.ink }}>
+            Order #{item.order_number}
+          </Typography>
+          <Box sx={{ mt: 0.25, display: "flex", alignItems: "center", gap: 0.5, color: brand.muted }}>
+            <ShoppingCartCheckout sx={{ fontSize: 16 }} />
+            <Typography sx={{ fontSize: 13.5 }}>
+              {count} {count === 1 ? "item" : "items"}
+            </Typography>
+          </Box>
         </Box>
-    );
+
+        <Chip
+          size="small"
+          label={item.status}
+          sx={{
+            flexShrink: 0,
+            height: 28,
+            px: 0.5,
+            fontWeight: 700,
+            textTransform: "capitalize",
+            backgroundColor: statusStyle.bg,
+            color: statusStyle.color,
+          }}
+        />
+      </Box>
+
+      <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1 }}>
+        <Typography sx={{ color: brand.muted, fontSize: 14 }}>Total</Typography>
+        <Typography sx={{ fontWeight: 800, fontSize: 22, color: brand.ink }}>
+          {Number(item.total_price || 0).toFixed(2)}
+          <Box component="span" sx={{ ml: 0.5, fontSize: 13, fontWeight: 600, color: brand.muted }}>
+            ETB
+          </Box>
+        </Typography>
+      </Box>
+
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1.5 }}>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Button
+            variant="outlined"
+            color="error"
+            disabled={locked || cancelling}
+            onClick={() => onCancel(item)}
+            startIcon={cancelling ? <CircularProgress size={16} color="inherit" /> : null}
+            sx={{ borderRadius: 999, px: 2.25, fontWeight: 600, textTransform: "none" }}
+          >
+            {cancelling ? "Cancelling…" : "Cancel"}
+          </Button>
+          {/* Payment isn't available yet, so this stays disabled like before */}
+          <Button
+            variant="contained"
+            disableElevation
+            disabled
+            sx={{ borderRadius: 999, px: 2.25, fontWeight: 600, textTransform: "none" }}
+          >
+            Pay now
+          </Button>
+        </Box>
+
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: brand.muted }}>
+          <Schedule sx={{ fontSize: 17 }} />
+          <Typography sx={{ fontSize: 13.5 }}>{formatDate(item.created_at)}</Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+});
+
+/* ---------------------------------- Tabs ---------------------------------- */
+
+const Tabs = memo(function Tabs({ category, setCategory, counts }) {
+  return (
+    <Box
+      role="tablist"
+      sx={{
+        display: "flex",
+        gap: 1,
+        overflowX: "auto",
+        py: 0.5,
+        mb: 2.5,
+        "&::-webkit-scrollbar": { display: "none" },
+        scrollbarWidth: "none",
+      }}
+    >
+      {TABS.map((tab) => {
+        const active = category === tab;
+        const count = counts[tab] ?? 0;
+        return (
+          <Button
+            key={tab}
+            role="tab"
+            aria-selected={active}
+            onClick={() => setCategory(tab)}
+            disableElevation
+            sx={{
+              flexShrink: 0,
+              px: 2.25,
+              py: 0.9,
+              borderRadius: 999,
+              fontSize: 15,
+              fontWeight: 600,
+              textTransform: "capitalize",
+              whiteSpace: "nowrap",
+              border: `1px solid ${active ? brand.primary : brand.line}`,
+              color: active ? "#fff" : brand.ink,
+              backgroundColor: active ? brand.primary : brand.card,
+              "&:hover": {
+                backgroundColor: active ? brand.primaryDark : brand.tint,
+                borderColor: brand.primary,
+              },
+            }}
+          >
+            {tab}
+            {count > 0 && (
+              <Box component="span" sx={{ ml: 0.75, opacity: active ? 0.9 : 0.6, fontWeight: 700 }}>
+                {count}
+              </Box>
+            )}
+          </Button>
+        );
+      })}
+    </Box>
+  );
+});
+
+function OrderSkeletons() {
+  return [0, 1, 2].map((i) => (
+    <Box key={i} sx={{ p: 2, borderRadius: `${brand.radius}px`, backgroundColor: brand.card, border: `1px solid ${brand.line}` }}>
+      <Skeleton variant="text" sx={{ width: "45%", fontSize: 18 }} />
+      <Skeleton variant="text" sx={{ width: "30%", fontSize: 14 }} />
+      <Skeleton variant="rounded" height={36} sx={{ mt: 2, borderRadius: 999 }} />
+    </Box>
+  ));
 }
+
+/* --------------------------------- MyOrder -------------------------------- */
 
 function MyOrder() {
-    const [loading, setLoading] = useState(true);
-    const [category, setCategory] = useState("All");
-    const [my_order, setMyOrder] = useState([]);
-    const theme = useTheme();
-    const [socket, setSocket] = useState(null);
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const updateOrderStatus = (orderId, newStatus) => {
-        setMyOrder(prev =>
-            prev.map(order =>
-                order.id === orderId
-                    ? { ...order, status: newStatus }
-                    : order
-            )
-        );
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [category, setCategory] = useState("All");
+  const [cancelTarget, setCancelTarget] = useState(null); // order waiting for confirmation
+  const [cancellingIds, setCancellingIds] = useState({});
+  const [notice, setNotice] = useState("");
+  const socketRef = useRef(null);
+
+  const loadOrders = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const result = await api.get("get-orders/");
+      setOrders(sortNewestFirst(result.data));
+    } catch (error) {
+      console.error("Error while getting my-orders", error);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  // One socket for the whole page. It reconnects on its own, because mobile browsers drop idle sockets.
+  useEffect(() => {
+    let closedByUs = false;
+    let retryTimer;
+    const host = import.meta.env.VITE_BACKEND_HOST || "";
+    const protocol = host.startsWith("http://") ? "ws" : "wss";
+    const wsUrl = `${protocol}://${host.replace(/^https?:\/\//, "")}/ws/livestatus/order-status/`;
+
+    const connect = () => {
+      const ws = new WebSocket(wsUrl);
+      socketRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)?.data;
+          if (!data?.id || !data?.status) return;
+          setOrders((prev) => prev.map((o) => (o.id === data.id ? { ...o, status: data.status } : o)));
+          setCancellingIds((prev) => {
+            if (!prev[data.id]) return prev;
+            const { [data.id]: _done, ...rest } = prev;
+            return rest;
+          });
+        } catch (error) {
+          console.error("Error parsing WebSocket message:", error);
+        }
+      };
+      ws.onerror = () => ws.close();
+      ws.onclose = () => {
+        if (!closedByUs) retryTimer = setTimeout(connect, RECONNECT_DELAY_MS);
+      };
     };
 
-    useEffect(() => {
-        async function getMyOrders() {
-            const url = "get-orders/";
-            try {
-                const result = await api.get(url);
-                setMyOrder(result.data);
-            } catch (error) {
-                console.log("error while getting my-orders", error);
-            } finally {
-                setLoading(false);
-            }
-        }
-        getMyOrders();
-        let url = import.meta.env.VITE_BACKEND_HOST;
-        const djangoHost = url.replace(/^https?:\/\//, "");
-        const wsUrl = `wss://${djangoHost}/ws/livestatus/order-status/`
-        const wsocket = new WebSocket(wsUrl)
-        setSocket(wsocket)
-        
-        wsocket.onmessage = (event) => {
-            try {
-                const response = JSON.parse(event.data);
-                const wsData = response?.data;
+    connect();
+    return () => {
+      closedByUs = true;
+      clearTimeout(retryTimer);
+      socketRef.current?.close();
+    };
+  }, []);
 
-                console.log("WebSocket message:", wsData);
+  const requestCancel = useCallback((order) => setCancelTarget(order), []);
 
-                if (wsData && wsData.id && wsData.status) {
-                    updateOrderStatus(wsData.id, wsData.status);
-                    console.log(
-                        `Order ${wsData.id} updated to ${wsData.status}`
-                    );
-                }
-            } catch (error) {
-                console.error("Error parsing WebSocket message:", error);
-            }
-        };
-        
-        wsocket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-        
-        wsocket.onclose = (event) => {
-            console.log('WebSocket connection closed:', event);
-        };
-        
-        return () => {
-            if (wsocket.readyState === WebSocket.OPEN) {
-                wsocket.close();
-            }
-        };
-    }, []);
+  const confirmCancel = useCallback(() => {
+    const order = cancelTarget;
+    setCancelTarget(null);
+    if (!order?.id) return;
 
+    const ws = socketRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setNotice("Connection lost. Reconnecting… please try again in a moment.");
+      return;
+    }
 
-    const filteredOrders = my_order.filter(item => {
-        if (category === "All") return true;
-        return item.status.toLowerCase() === category.toLowerCase();
-    });
+    ws.send(JSON.stringify({ type: "cancel_order", data: { status: "cancelled", order_id: order.id } }));
+    setCancellingIds((prev) => ({ ...prev, [order.id]: true }));
 
-    return (
-        <Box sx={{
-            height: '100dvh',
-            width: '100%',
-            backgroundColor:'#F9F9F9',
-            overflowY: 'auto',
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            overflowX:"hidden"
-            }}>
-            <Header />
-            <Box sx={{
-                minHeight: '100dvh',
-                width: '100%',
-                overflowY: 'auto',
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                backgroundColor:'#F9F9F9',
-                my:7,
-                overflowX:"hidden"
-            }}>
-                <Container maxWidth="lg" sx={{
-                    flex: 1,
-                    py: 3,
-                    px: isMobile ? 1 : 3
-                }}>
-                    <Box sx={{
-                        mb: 4,
-                        textAlign:'left'
-                    }}>
-                        <Typography sx={{
-                            fontSize: isMobile ? 28 : 36,
-                            fontWeight: 700,
-                            mb: 1
-                        }}>
-                            My Orders
-                        </Typography>
-                        <Typography sx={{
-                            fontSize: isMobile ? 14 : 16,
-                            color: 'text.secondary',
-                            fontWeight: 500
-                        }}>
-                            {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''} found
-                        </Typography>
-                    </Box>
+    // If the server never replies, let the person try again
+    setTimeout(() => {
+      setCancellingIds((prev) => {
+        if (!prev[order.id]) return prev;
+        const { [order.id]: _timedOut, ...rest } = prev;
+        return rest;
+      });
+    }, CANCEL_TIMEOUT_MS);
+  }, [cancelTarget]);
 
-                    <Box sx={{
-                        width: "100%",
-                        flex: 1
-                    }}>
-                        <Tabs
-                            category={category}
-                            setCategory={setCategory}
-                            tabList={["pending","confirmed", "delivered", "cancelled"]} />
+  const counts = useMemo(() => {
+    const result = { All: orders.length };
+    for (const order of orders) {
+      const key = String(order.status || "").toLowerCase();
+      result[key] = (result[key] || 0) + 1;
+    }
+    return result;
+  }, [orders]);
 
-                        {loading ? (
-                            <Box sx={{
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                height: 200
-                            }}>
-                                <CircularProgress size={40} />
-                            </Box>
-                        ) : filteredOrders.length === 0 ? (
-                            <Box sx={{
-                                textAlign: 'center',
-                                py: 8,
-                                backgroundColor: 'white',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                            }}>
-                                <Typography variant="h6" color="text.secondary">
-                                    No orders found
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                    {category === "All"
-                                        ? "You haven't placed any orders yet."
-                                        : `No ${category} orders found.`}
-                                </Typography>
-                            </Box>
-                        ) : (
-                            <Stack spacing={3} width={"100%"} sx={{ pb: 2 }}>
-                                {filteredOrders.reverse().map((item, index) => (
-                                    <Order key={index} item={item} socket={socket} />
-                                ))}
-                            </Stack>
-                        )}
-                    </Box>
-                </Container>
+  const filteredOrders = useMemo(
+    () => (category === "All" ? orders : orders.filter((o) => String(o.status || "").toLowerCase() === category)),
+    [orders, category]
+  );
 
-                <BottomNav />
-            </Box>
-        </Box>
-    );
+  return (
+    <Box
+      sx={{
+        boxSizing: "border-box",
+        height: "100dvh",
+        width: "100%",
+        backgroundColor: brand.bg,
+        overflowY: "auto",
+        overflowX: "hidden",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Header />
+
+      <Box
+        component="main"
+        sx={{
+          boxSizing: "border-box",
+          flex: 1,
+          width: "100%",
+          maxWidth: 1000,
+          mx: "auto",
+          px: { xs: 2, sm: 3 },
+          pt: { xs: 11, sm: 12 },
+          pb: 12, // room for the bottom navigation
+        }}
+      >
+        <Typography component="h1" sx={{ fontSize: { xs: 26, sm: 32 }, fontWeight: 800, letterSpacing: "-0.5px", color: brand.ink }}>
+          My orders
+        </Typography>
+        <Typography sx={{ mt: 0.5, mb: 2.5, color: brand.muted }}>
+          {filteredOrders.length} order{filteredOrders.length === 1 ? "" : "s"}
+        </Typography>
+
+        <Tabs category={category} setCategory={setCategory} counts={counts} />
+
+        {loading ? (
+          <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}>
+            <OrderSkeletons />
+          </Box>
+        ) : loadError ? (
+          <Box sx={{ py: 8, textAlign: "center" }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: brand.ink }}>
+              Couldn’t load your orders
+            </Typography>
+            <Typography sx={{ mt: 0.5, mb: 2, color: brand.muted }}>Check your connection and try again.</Typography>
+            <Button
+              variant="contained"
+              disableElevation
+              onClick={() => {
+                setLoading(true);
+                loadOrders();
+              }}
+              sx={{ borderRadius: 999, px: 3, textTransform: "none", fontWeight: 600, backgroundColor: brand.primary, "&:hover": { backgroundColor: brand.primaryDark } }}
+            >
+              Try again
+            </Button>
+          </Box>
+        ) : filteredOrders.length === 0 ? (
+          <Box sx={{ py: 8, textAlign: "center" }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: brand.ink }}>
+              No orders found
+            </Typography>
+            <Typography sx={{ mt: 0.5, color: brand.muted }}>
+              {category === "All" ? "You haven’t placed any orders yet." : `You have no ${category} orders.`}
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}>
+            {filteredOrders.map((item) => (
+              <Order key={item.id} item={item} cancelling={!!cancellingIds[item.id]} onCancel={requestCancel} />
+            ))}
+          </Box>
+        )}
+      </Box>
+
+      <BottomNav />
+
+      <Dialog open={!!cancelTarget} onClose={() => setCancelTarget(null)} PaperProps={{ sx: { borderRadius: `${brand.radius}px` } }}>
+        <DialogTitle sx={{ fontWeight: 700 }}>Cancel this order?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Order #{cancelTarget?.order_number} will be cancelled. This can’t be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setCancelTarget(null)} sx={{ textTransform: "none", fontWeight: 600, color: brand.ink }}>
+            Keep order
+          </Button>
+          <Button onClick={confirmCancel} color="error" variant="contained" disableElevation sx={{ borderRadius: 999, textTransform: "none", fontWeight: 600 }}>
+            Cancel order
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={!!notice} autoHideDuration={4000} onClose={() => setNotice("")} message={notice} />
+    </Box>
+  );
 }
 
 export default MyOrder;

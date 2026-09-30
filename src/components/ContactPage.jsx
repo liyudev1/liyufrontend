@@ -1,278 +1,176 @@
-import { 
-    Box, 
-    Button, 
-    CircularProgress, 
-    TextField, 
-    Typography, 
-    Avatar,
-    Stack,
-    Paper,
-    Container,
-    IconButton,
-    useTheme,
-    useMediaQuery
-  } from "@mui/material";
-  import { 
-    PersonOutlined, 
-    PhoneOutlined, 
-    Telegram,
-    Facebook,
-    YouTube,
-    Instagram,
-    LinkedIn,
-    Send,
-  } from "@mui/icons-material";
-  import { Header } from "./HomePage";
-  import BottomNav from "./BottomNav";
-  import { useState } from "react";
-  import api from "../api";
+import { useState } from "react";
+import { Alert, Box, Button, CircularProgress, Link, Snackbar, TextField, Typography } from "@mui/material";
+import { PhoneOutlined, Send } from "@mui/icons-material";
+import api from "../api";
+import { Header } from "./HomePage";
+import BottomNav from "./BottomNav";
+import { brand } from "./brand";
 
-  
-  function ContactUs() {
-    const [name, setName] = useState("");
-    const [contact, setContact] = useState("");
-    const [message, setMessage] = useState("");
-    const [loading, setLoading] = useState(false);
-    
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
- 
-    const handleClick = (url) => {
-      const newWindow = window.open(url, "_blank", "noopener,noreferrer");
-      
-      if (newWindow) {
-        newWindow.focus();
-      }
-    };
-    async function handleSubmit() {
-      setLoading(true);
-      try {
-        await api.post("contact-us/", {
-          name: name,
-          contact: contact,
-          message: message
-        });
+const PHONE_NUMBERS = ["0956769920", "0777454599", "0949016815"];
 
-      } catch (error) {
-        console.log("error while submitting message");
-      } finally {
-        setName("");
-        setContact("");
-        setMessage("");
-        setLoading(false);
-      }
+const cardSx = {
+  boxSizing: "border-box",
+  p: { xs: 2.5, sm: 3 },
+  backgroundColor: brand.card,
+  border: `1px solid ${brand.line}`,
+  borderRadius: `${brand.radius}px`,
+};
+
+const fieldSx = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "12px",
+    backgroundColor: brand.card,
+    "&.Mui-focused fieldset": { borderColor: brand.primary },
+  },
+  "& label.Mui-focused": { color: brand.primaryDark },
+};
+
+function ContactUs() {
+  const [name, setName] = useState("");
+  const [contact, setContact] = useState("");
+  const [message, setMessage] = useState("");
+  const [messageError, setMessageError] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null); // { severity, text }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (loading) return;
+
+    if (!message.trim()) {
+      setMessageError(true);
+      return;
     }
-  
-    const socialLinks = [
-      { icon: <Facebook />, color: "#1877F2",link:"" },
-      { icon: <YouTube />, color: "#FF0000",link:"" },
-      { icon: <Instagram />, color: "#E4405F",link:"" },
-      { icon: <Telegram />, color: "#0088CC",link:"https://t.me/crusade_12" },
-      { icon: <LinkedIn />, color: "#0A66C2" },
-    ];
-  
-    const contactPersons = [
-      {
-        name: "Hailemariam",
-        role: "Manager",
-        phone: "0956769920   0777454599",
-        color: "warning",
-      },
-      {
-        name: "Haile Abi",
-        role: "Developer",
-        phone: "0949016815",
-        color: "success",
-      },
-    ];
-  
-    return (
+
+    setLoading(true);
+    try {
+      await api.post("contact-us/", {
+        name: name.trim(),
+        contact: contact.trim(),
+        message: message.trim(),
+      });
+      // Only clear the form once the message was really sent
+      setName("");
+      setContact("");
+      setMessage("");
+      setToast({ severity: "success", text: "Message sent. Thank you!" });
+    } catch (error) {
+      console.error("Error while submitting message", error);
+      setToast({ severity: "error", text: "Couldn’t send your message. Please try again." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Box
+      sx={{
+        boxSizing: "border-box",
+        minHeight: "100dvh",
+        width: "100%",
+        backgroundColor: brand.bg,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Header />
+
       <Box
+        component="main"
         sx={{
-          minHeight: '100dvh',
-          width: '100%',
-          backgroundColor: '#F9F9F9',
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-          pb: 8,
+          boxSizing: "border-box",
+          flex: 1,
+          width: "100%",
+          maxWidth: 1000,
+          mx: "auto",
+          px: { xs: 2, sm: 3 },
+          pt: { xs: 11, sm: 12 },
+          pb: 12, // room for the bottom navigation
         }}
       >
-        <Header />
-        <Container maxWidth="lg" sx={{ flex: 1, py: 4 }}>
-          <Typography
-            variant="h4"
-            component="h1"
-            sx={{
-              fontWeight: 700,
-              textAlign: 'center',
-              mt: 6,
-              mb:5,
-              color: 'primary.main',
-            }}
-          >
-            Contact Us
-          </Typography>
-  
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              borderRadius: 3,
-              overflow: 'hidden',
-              mb: 4,
-              gap:3
-            }}
-          >
-            <Box
-              sx={{
-                flex: 1,
-                backgroundColor:"#F9F9F9",
-                py: 4,
-                px:2,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 5,
-              }}
-            >
-  
-              <Stack spacing={5}>
-                {contactPersons.map((person, index) => (
-                  <Box key={index}>
-                        <Stack direction="row" alignItems="center" spacing={2}>
-                            <Avatar
-                            sx={{
-                                width: 100,
-                                height: 100,
-                                bgcolor: 'primary.main',
-                                fontSize: '1.5rem',
-                            }}
-                            >
-                            H
-                            </Avatar>
-                            <Box>
-                            <Typography variant="h6" fontWeight={600}>
-                                {person.name}
-                            </Typography>
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                                <PhoneOutlined color={person.color} />
-                                <Typography variant="body2" color="text.secondary">
-                                    {person.phone}
-                                </Typography>
-                            </Stack>
-                            <Typography>{person.role}</Typography>
-                            </Box>
-                        </Stack>
-                  </Box>
-                ))}
-              </Stack>
-  
+        <Typography component="h1" sx={{ fontSize: { xs: 26, sm: 32 }, fontWeight: 800, letterSpacing: "-0.5px", color: brand.ink }}>
+          Contact us
+        </Typography>
+        <Typography sx={{ mt: 0.5, mb: 3, color: brand.muted }}>Questions or feedback? Call us or send a message.</Typography>
 
-              <Box>
-                <Typography variant="h6" gutterBottom fontWeight={600}>
-                  Contact Developer
-                </Typography>
-                <Stack direction="row" spacing={1}>
-                  {socialLinks.map((social, index) => (
-                    <IconButton
-                      key={index}
-                      onClick={()=>handleClick(social.link)}
-                      sx={{
-                        backgroundColor: `${social.color}15`,
-                        color: social.color,
-                        '&:hover': {
-                          backgroundColor: `${social.color}25`,
-                        },
-                      }}
-                    >
-                      {social.icon}
-                    </IconButton>
-                  ))}
-                </Stack>
-              </Box>
-  
-              <Button
-                variant="contained"
-                startIcon={<Telegram />}
-                fullWidth
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                  py: 1.5,
-                  borderRadius: 2,
-                }}
-              >
-                Join Telegram Channel
-              </Button>
-            </Box>
-  
-            <Box
-              sx={{
-                flex: 1,
-                py: 4,
-                px:2,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 3,
-              }}
-            >
-              <Typography variant="h5" fontWeight={600} gutterBottom>
-                Send us a Message
-              </Typography>
-              
-              <TextField
-                fullWidth
-                label="Your Name"
-                variant="outlined"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              
-              <TextField
-                fullWidth
-                label="Your Contact"
-                variant="outlined"
-                value={contact}
-                onChange={(e) => setContact(e.target.value)}
-              />
-              
-              <TextField
-                fullWidth
-                label="Your Message"
-                variant="outlined"
-                multiline
-                rows={6}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                required
-              />
-              
-              <Button
-                variant="contained"
-                color="primary"
-                size="large"
-                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Send />}
-                onClick={handleSubmit}
-                disabled={loading}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                  py: 1.5,
-                  borderRadius: 2,
-                  mt: 1,
-                }}
-              >
-                {loading ? 'Submitting...' : 'Submit Message'}
-              </Button>
+        <Box sx={{ display: "grid", gap: 2.5, gridTemplateColumns: { xs: "1fr", md: "1fr 1.3fr" }, alignItems: "start" }}>
+          {/* Phone numbers */}
+          <Box sx={{ ...cardSx, minWidth: 0 }}>
+            <Typography sx={{ mb: 2, fontWeight: 700, color: brand.ink }}>Call us</Typography>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+              {PHONE_NUMBERS.map((phone) => (
+                <Link
+                  key={phone}
+                  href={`tel:${phone}`}
+                  underline="none"
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                    p: 1.25,
+                    borderRadius: "14px",
+                    color: brand.ink,
+                    border: `1px solid ${brand.line}`,
+                    transition: "border-color 0.2s, background-color 0.2s",
+                    "&:hover": { borderColor: brand.primary, backgroundColor: brand.tint },
+                  }}
+                >
+                  <Box sx={{ width: 40, height: 40, borderRadius: "12px", display: "grid", placeItems: "center", backgroundColor: brand.tint, color: brand.primaryDark }}>
+                    <PhoneOutlined />
+                  </Box>
+                  <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.3px" }}>{phone}</Typography>
+                </Link>
+              ))}
             </Box>
           </Box>
-        </Container>
-        
-        <BottomNav />
+
+          {/* Message form */}
+          <Box component="form" noValidate onSubmit={handleSubmit} sx={{ ...cardSx, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700, color: brand.ink }}>Send us a message</Typography>
+
+            <TextField fullWidth label="Your name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} sx={fieldSx} />
+            <TextField fullWidth label="Phone or email" value={contact} onChange={(e) => setContact(e.target.value)} sx={fieldSx} />
+            <TextField
+              fullWidth
+              required
+              multiline
+              minRows={5}
+              label="Your message"
+              value={message}
+              error={messageError}
+              helperText={messageError ? "Please write a message before sending." : " "}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                if (messageError) setMessageError(false);
+              }}
+              sx={fieldSx}
+            />
+
+            <Button
+              type="submit"
+              variant="contained"
+              disableElevation
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <Send />}
+              sx={{ py: 1.4, borderRadius: 999, fontSize: 16, fontWeight: 700, textTransform: "none", backgroundColor: brand.primary, "&:hover": { backgroundColor: brand.primaryDark } }}
+            >
+              {loading ? "Sending…" : "Send message"}
+            </Button>
+          </Box>
+        </Box>
       </Box>
-    );
-  }
-  
-  export default ContactUs;
+
+      <BottomNav />
+
+      <Snackbar open={!!toast} autoHideDuration={5000} onClose={() => setToast(null)} anchorOrigin={{ vertical: "top", horizontal: "center" }}>
+        {toast ? (
+          <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)} sx={{ width: "100%" }}>
+            {toast.text}
+          </Alert>
+        ) : undefined}
+      </Snackbar>
+    </Box>
+  );
+}
+
+export default ContactUs;

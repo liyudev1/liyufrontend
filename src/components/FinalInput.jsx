@@ -1,208 +1,123 @@
-import * as React from 'react';
-import PropTypes from 'prop-types';
-import { styled } from '@mui/material/styles';
-import Stepper from '@mui/material/Stepper';
-import Step from '@mui/material/Step';
-import StepLabel from '@mui/material/StepLabel';
-import Check from '@mui/icons-material/Check';
-import SettingsIcon from '@mui/icons-material/Settings';
-import GroupAddIcon from '@mui/icons-material/GroupAdd';
-import VideoLabelIcon from '@mui/icons-material/VideoLabel';
-import StepConnector, { stepConnectorClasses } from '@mui/material/StepConnector';
-import { Box, Stack, Typography } from '@mui/material';
-import { CheckCircle, PhoneOutlined } from '@mui/icons-material';
+import { memo } from "react";
+import { Box, Button, Link, Step, StepConnector, StepLabel, Stepper, Typography } from "@mui/material";
+import { Check, CheckCircle, PhoneOutlined } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
+import { brand } from "./brand";
 
-const QontoConnector = styled(StepConnector)(({ theme }) => ({
-  [`&.${stepConnectorClasses.alternativeLabel}`]: {
-    top: 10,
-    left: 'calc(-50% + 16px)',
-    right: 'calc(50% + 16px)',
-  },
-  [`&.${stepConnectorClasses.active}`]: {
-    [`& .${stepConnectorClasses.line}`]: {
-      borderColor: '#784af4',
-    },
-  },
-  [`&.${stepConnectorClasses.completed}`]: {
-    [`& .${stepConnectorClasses.line}`]: {
-      borderColor: '#784af4',
-    },
-  },
-  [`& .${stepConnectorClasses.line}`]: {
-    borderColor: '#eaeaf0',
-    borderTopWidth: 3,
-    borderRadius: 1,
-    ...theme.applyStyles('dark', {
-      borderColor: theme.palette.grey[800],
-    }),
-  },
-}));
+const STEPS = ["Cart", "Delivery", "Done"];
+const SUPPORT_PHONES = ["0956769920", "0777454599"];
 
-const QontoStepIconRoot = styled('div')(({ theme }) => ({
-  color: '#eaeaf0',
-  display: 'flex',
-  height: 22,
-  alignItems: 'center',
-  '& .QontoStepIcon-completedIcon': {
-    color: '#784af4',
-    zIndex: 1,
-    fontSize: 18,
-  },
-  '& .QontoStepIcon-circle': {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    backgroundColor: 'currentColor',
-  },
-  ...theme.applyStyles('dark', {
-    color: theme.palette.grey[700],
-  }),
-  variants: [
-    {
-      props: ({ ownerState }) => ownerState.active,
-      style: {
-        color: '#784af4',
-      },
-    },
-  ],
-}));
-
-function QontoStepIcon(props) {
-  const { active, completed, className } = props;
-
+function StepIcon({ active, completed }) {
+  const filled = active || completed;
   return (
-    <QontoStepIconRoot ownerState={{ active }} className={className}>
+    <Box
+      sx={{
+        boxSizing: "border-box",
+        width: 24,
+        height: 24,
+        zIndex: 1,
+        display: "grid",
+        placeItems: "center",
+        borderRadius: "50%",
+        color: "#fff",
+        backgroundColor: filled ? brand.primary : brand.card,
+        border: `2px solid ${filled ? brand.primary : brand.line}`,
+      }}
+    >
       {completed ? (
-        <Check className="QontoStepIcon-completedIcon" />
-      ) : (
-        <div className="QontoStepIcon-circle" />
-      )}
-    </QontoStepIconRoot>
+        <Check sx={{ fontSize: 15 }} />
+      ) : active ? (
+        <Box sx={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#fff" }} />
+      ) : null}
+    </Box>
   );
 }
 
-QontoStepIcon.propTypes = {
-  /**
-   * Whether this step is active.
-   * @default false
-   */
-  active: PropTypes.bool,
-  className: PropTypes.string,
-  /**
-   * Mark the step as completed. Is passed to child components.
-   * @default false
-   */
-  completed: PropTypes.bool,
+const connectorSx = {
+  "& .MuiStepConnector-line": { borderColor: brand.line, borderTopWidth: 3, borderRadius: 1 },
+  "&.Mui-active .MuiStepConnector-line, &.Mui-completed .MuiStepConnector-line": { borderColor: brand.primary },
 };
 
-
-const ColorlibStepIconRoot = styled('div')(({ theme }) => ({
-  backgroundColor: '#ccc',
-  zIndex: 1,
-  color: '#fff',
-  width: 50,
-  height: 50,
-  display: 'flex',
-  borderRadius: '50%',
-  justifyContent: 'center',
-  alignItems: 'center',
-  ...theme.applyStyles('dark', {
-    backgroundColor: theme.palette.grey[700],
-  }),
-  variants: [
-    {
-      props: ({ ownerState }) => ownerState.active,
-      style: {
-        backgroundImage:
-          'linear-gradient( 136deg, rgb(242,113,33) 0%, rgb(233,64,87) 50%, rgb(138,35,135) 100%)',
-        boxShadow: '0 4px 10px 0 rgba(0,0,0,.25)',
-      },
-    },
-    {
-      props: ({ ownerState }) => ownerState.completed,
-      style: {
-        backgroundImage:
-          'linear-gradient( 136deg, rgb(242,113,33) 0%, rgb(233,64,87) 50%, rgb(138,35,135) 100%)',
-      },
-    },
-  ],
-}));
-
-function ColorlibStepIcon(props) {
-  const { active, completed, className } = props;
-
-  const icons = {
-    1: <SettingsIcon />,
-    2: <GroupAddIcon />,
-    3: <VideoLabelIcon />,
-  };
-
-  return (
-    <ColorlibStepIconRoot ownerState={{ completed, active }} className={className}>
-      {icons[String(props.icon)]}
-    </ColorlibStepIconRoot>
-  );
-}
-
-ColorlibStepIcon.propTypes = {
-  /**
-   * Whether this step is active.
-   * @default false
-   */
-  active: PropTypes.bool,
-  className: PropTypes.string,
-  /**
-   * Mark the step as completed. Is passed to child components.
-   * @default false
-   */
-  completed: PropTypes.bool,
-  /**
-   * The label displayed in the step icon.
-   */
-  icon: PropTypes.node,
+const labelSx = {
+  "& .MuiStepLabel-label": {
+    mt: 0.75,
+    fontSize: 13,
+    fontWeight: 600,
+    color: brand.muted,
+    "&.Mui-active, &.Mui-completed": { color: brand.ink },
+  },
 };
 
-const steps = ['Cart Overview', 'Shipping Address', 'Status'];
+function OrderProgress({ step }) {
+  // Once the order is placed (last step) every step shows as completed
+  const activeStep = step >= STEPS.length - 1 ? STEPS.length : step;
 
-
-function OrderProgress({step}){
   return (
-    <Stepper alternativeLabel activeStep={step} connector={<QontoConnector />}>
-      {steps.map((label) => (
+    <Stepper alternativeLabel activeStep={activeStep} connector={<StepConnector sx={connectorSx} />} sx={{ px: 2, py: 2 }}>
+      {STEPS.map((label) => (
         <Step key={label}>
-          <StepLabel StepIconComponent={QontoStepIcon}>{label}</StepLabel>
+          <StepLabel StepIconComponent={StepIcon} sx={labelSx}>
+            {label}
+          </StepLabel>
         </Step>
       ))}
     </Stepper>
-  )
+  );
 }
 
-export function OrderStatus(){
+export function OrderStatus() {
+  const navigate = useNavigate();
+
   return (
-    <Box sx={{ textAlign: 'center', p: 3 }}>
-    <CheckCircle color="success" sx={{ fontSize: 48, mb: 2 }} />
-    <Typography variant="h5" gutterBottom>
-      Order Successful!
-    </Typography>
-    <Typography color="text.secondary">
-      Your order has been successfully placed
-    </Typography>
-    <Stack direction={"row"} spacing={3} mt={2}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-          <PhoneOutlined color="warning" />
-          <Typography fontSize={22} variant="body2" color="text.secondary">
-              0956769920
-          </Typography>
-      </Stack>
-      <Stack direction="row" alignItems="center" spacing={1}>
-          <PhoneOutlined color="success" />
-          <Typography fontSize={22} variant="body2" color="text.secondary">
-              0777454599
-          </Typography>
-      </Stack>
-    </Stack>
-  </Box>
-  )
+    <Box sx={{ textAlign: "center", px: 3, py: 5 }}>
+      <Box
+        sx={{
+          width: 76,
+          height: 76,
+          mx: "auto",
+          mb: 2,
+          display: "grid",
+          placeItems: "center",
+          borderRadius: "50%",
+          backgroundColor: "#DDF5E5",
+          color: "#13693A",
+        }}
+      >
+        <CheckCircle sx={{ fontSize: 46 }} />
+      </Box>
+
+      <Typography component="h2" sx={{ fontSize: 24, fontWeight: 800, color: brand.ink }}>
+        Order placed!
+      </Typography>
+      <Typography sx={{ mt: 0.75, color: brand.muted }}>
+        Your order has been successfully placed. You can follow its status in My Orders.
+      </Typography>
+
+      <Button
+        variant="contained"
+        disableElevation
+        onClick={() => navigate("/my-order")}
+        sx={{ mt: 3, px: 4, py: 1.25, borderRadius: 999, fontWeight: 700, textTransform: "none", backgroundColor: brand.primary, "&:hover": { backgroundColor: brand.primaryDark } }}
+      >
+        View my orders
+      </Button>
+
+      <Typography sx={{ mt: 4, mb: 1, fontSize: 13.5, color: brand.muted }}>Need help? Call us</Typography>
+      <Box sx={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 2.5 }}>
+        {SUPPORT_PHONES.map((phone) => (
+          <Link
+            key={phone}
+            href={`tel:${phone}`}
+            underline="hover"
+            sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontSize: 17, fontWeight: 700, color: brand.ink }}
+          >
+            <PhoneOutlined sx={{ fontSize: 20, color: brand.primary }} />
+            {phone}
+          </Link>
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
-export default OrderProgress
+export default memo(OrderProgress);
