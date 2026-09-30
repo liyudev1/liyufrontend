@@ -1,521 +1,396 @@
-import { 
-    Box, 
-    Button, 
-    Divider, 
-    Stack, 
-    Typography, 
-    useTheme,
-    CircularProgress,
-    Chip,
-    Paper
-  } from "@mui/material"
-  import { 
-    ExpandLess, 
-    ExpandMore, 
-    LocationOn, 
-    ShoppingCartOutlined, 
-    Star,
-    StarHalf,
-    StarBorder 
-  } from "@mui/icons-material"
-  import { Header } from "./HomePage"
-  import HoverRating from "./RatingButton"
-  import { Swiper, SwiperSlide } from 'swiper/react'
-  import { Autoplay, Pagination, Navigation } from 'swiper/modules'
-  import 'swiper/css'
-  import 'swiper/css/pagination'
-  import 'swiper/css/navigation'
-  import 'swiper/css/autoplay'
-  import { useEffect, useState } from "react"
-  import { useParams } from "react-router-dom"
-  import api from "../api"
-  import { useCart } from "./CartFunc"
-  import AmountControl from "./AmountControl"
-  import MyCart from "./MyCart"
-  
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Box, Button, Divider, Paper, Skeleton, Stack, Typography } from "@mui/material";
+import { ExpandLess, ExpandMore, LocationOn, ShoppingCartOutlined, Star } from "@mui/icons-material";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Autoplay, Pagination } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/pagination";
+import "swiper/css/autoplay";
+import { useParams } from "react-router-dom";
+import api from "../api";
+import { Header } from "./HomePage";
+import HoverRating from "./RatingButton";
+import { useCart } from "./CartFunc";
+import AmountControl from "./AmountControl";
+import { brand } from "./brand";
 
-  const MAX_DESCRIPTION_CHARS = 300
-  const SWIPER_AUTOPLAY_DELAY = 5000
-  const NOTIFICATION_DURATION = 10000
-  
+// The cart drawer is only needed after the person opens it
+const MyCart = lazy(() => import("./MyCart"));
 
-  function ProductDescription({ text, maxChars = MAX_DESCRIPTION_CHARS }) {
-    const [isExpanded, setIsExpanded] = useState(false)
-    const canExpand = text?.length > maxChars
-    const displayText = canExpand && !isExpanded 
-      ? `${text.substring(0, maxChars)}...`
-      : text || 'No description available'
-  
-    return (
-      <Box>
-        <Typography 
-          sx={{ 
-            fontSize: { xs: 14, md: 16 }, 
-            color: "text.secondary",
-            lineHeight: 1.6
-          }}
+const MAX_DESCRIPTION_CHARS = 300;
+const SWIPER_AUTOPLAY_DELAY = 5000;
+const SERVICE_FEE = 10; // flat fee, same value as before
+const DEFAULT_IMAGE = "/default-image.jpg";
+const BACKEND_HOST = import.meta.env.VITE_BACKEND_HOST || "";
+
+const cardSx = {
+  boxSizing: "border-box",
+  backgroundColor: brand.card,
+  border: `1px solid ${brand.line}`,
+  borderRadius: `${brand.radius}px`,
+};
+
+const money = (value) => `${Number(value || 0).toFixed(2)} ETB`;
+
+// Relative paths get the backend host; full URLs are used as they are
+const imageUrl = (path) => {
+  if (!path) return DEFAULT_IMAGE;
+  return /^https?:\/\//i.test(path) ? path : `${BACKEND_HOST}${path}`;
+};
+
+const handleImageError = (e) => {
+  e.currentTarget.onerror = null; // avoid an endless loop if the fallback is missing too
+  e.currentTarget.src = DEFAULT_IMAGE;
+};
+
+/* ------------------------------ Small pieces ------------------------------ */
+
+function ProductDescription({ text, maxChars = MAX_DESCRIPTION_CHARS }) {
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = text?.length > maxChars;
+  const shown = canExpand && !expanded ? `${text.substring(0, maxChars)}…` : text || "No description available";
+
+  return (
+    <Box>
+      <Typography sx={{ fontSize: { xs: 14.5, md: 15.5 }, lineHeight: 1.65, color: brand.muted }}>
+        {shown}
+      </Typography>
+      {canExpand && (
+        <Button
+          size="small"
+          onClick={() => setExpanded((v) => !v)}
+          startIcon={expanded ? <ExpandLess /> : <ExpandMore />}
+          sx={{ mt: 0.5, px: 0, textTransform: "none", fontWeight: 600, color: brand.primaryDark }}
         >
-          {displayText}
-        </Typography>
-        {canExpand && (
-          <Button
-            size="small"
-            onClick={() => setIsExpanded(!isExpanded)}
-            startIcon={isExpanded ? <ExpandLess /> : <ExpandMore />}
-            sx={{ 
-              mt: 1, 
-              textTransform: "capitalize",
-              color: "primary.main"
-            }}
-          >
-            {isExpanded ? 'Read Less' : 'Read More'}
-          </Button>
-        )}
+          {expanded ? "Show less" : "Read more"}
+        </Button>
+      )}
+    </Box>
+  );
+}
+
+function Slide({ src, alt, eager }) {
+  return (
+    <img
+      src={imageUrl(src)}
+      alt={alt}
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      onError={handleImageError}
+      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+    />
+  );
+}
+
+function ProductGallery({ images, productName }) {
+  const frameSx = {
+    boxSizing: "border-box",
+    width: "100%",
+    aspectRatio: "4 / 3",
+    borderRadius: `${brand.radius}px`,
+    overflow: "hidden",
+    backgroundColor: brand.bg,
+  };
+
+  if (!images?.length) {
+    return (
+      <Box sx={{ ...frameSx, display: "grid", placeItems: "center" }}>
+        <Typography sx={{ color: brand.muted }}>No images available</Typography>
       </Box>
-    )
+    );
   }
-  
-  function ProductImageGallery({ images, productName }) {
-    const theme = useTheme()
-    
-    if (!images?.length) {
-      return (
-        <Box
-          sx={{
-            width: '100%',
-            height: 300,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            bgcolor: 'grey.100',
-            borderRadius: 2
-          }}
-        >
-          <Typography color="text.secondary">
-            No images available
-          </Typography>
-        </Box>
-      )
-    }
-  
-    if (images.length === 1) {
-      return (
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            p: 2
-          }}
-        >
-          <img
-            src={`${import.meta.env.VITE_BACKEND_HOST}${images[0]?.image}`}
-            alt={productName}
-            style={{
-              width: '100%',
-              maxWidth: 400,
-              height: 'auto',
-              maxHeight: 400,
-              objectFit: 'contain',
-              borderRadius: 12
-            }}
-            onError={(e) => {
-              e.target.src = '/default-image.jpg'
-            }}
-          />
-        </Box>
-      )
-    }
-  
+
+  if (images.length === 1) {
     return (
-      <Box sx={{ 
-        position: 'relative',
-        '& .swiper': {
-          width: '100%',
-          borderRadius: 12,
-          overflow: 'hidden'
-        },
-        '& .swiper-slide': {
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        },
-        '& .swiper-pagination-bullet': {
-          width: 8,
-          height: 8,
-          backgroundColor: 'white',
-          opacity: 0.5,
-          '&:hover': { opacity: 0.8 },
-        },
-        '& .swiper-pagination-bullet-active': {
-          backgroundColor: theme.palette.primary.main,
-          opacity: 1,
-          transform: 'scale(1.2)'
-        }
-      }}>
-        <Swiper
-          modules={[Autoplay, Pagination, Navigation]}
-          pagination={{ clickable: true }}
-          autoplay={{
-            delay: SWIPER_AUTOPLAY_DELAY,
-            disableOnInteraction: false,
-            pauseOnMouseEnter: true
-          }}
-          loop={images.length > 1}
-          speed={600}
-          grabCursor={true}
-          className="product-swiper"
-        >
-          {images.map((image, index) => (
-            <SwiperSlide key={image.id || index}>
-              <img
-                src={`${import.meta.env.VITE_BACKEND_HOST}${image?.image}`}
-                alt={image.alt || `${productName} - Image ${index + 1}`}
-                style={{
-                  width: '100%',
-                  height: 300,
-                  objectFit: 'cover'
-                }}
-                loading="lazy"
-                onError={(e) => {
-                  e.target.src = '/default-image.jpg'
-                }}
-              />
-            </SwiperSlide>
-          ))}
-        </Swiper>
+      <Box sx={frameSx}>
+        <Slide src={images[0]?.image} alt={productName} eager />
       </Box>
-    )
+    );
   }
-  
-  function RatingDisplay({ rating = 0 }) {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Stack direction="row" spacing={0.2}>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <Star
-              key={star}
-              sx={{
-                fontSize: 20,
-                color: star <= Math.floor(rating) ? 'warning.main' : 'grey.300'
-              }}
+
+  return (
+    <Box
+      sx={{
+        ...frameSx,
+        "& .swiper": { width: "100%", height: "100%" },
+        "& .swiper-pagination-bullet": { width: 8, height: 8, backgroundColor: "#fff", opacity: 0.7 },
+        "& .swiper-pagination-bullet-active": { backgroundColor: brand.primary, opacity: 1 },
+      }}
+    >
+      <Swiper
+        modules={[Autoplay, Pagination]}
+        pagination={{ clickable: true }}
+        autoplay={{ delay: SWIPER_AUTOPLAY_DELAY, disableOnInteraction: false, pauseOnMouseEnter: true }}
+        loop
+        speed={500}
+        grabCursor
+      >
+        {images.map((image, index) => (
+          <SwiperSlide key={image.id ?? index}>
+            <Slide
+              src={image?.image}
+              alt={image.alt || `${productName} – image ${index + 1}`}
+              eager={index === 0}
             />
-          ))}
-        </Stack>
-        <Typography sx={{ fontSize: 16, fontWeight: 500, ml: 0.5 }}>
-          {rating}
-        </Typography>
-        <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
-          Rating
-        </Typography>
-      </Box>
-    )
-  }
-  
-  function LoadingState() {
-    return (
-      <Box sx={{
-        minHeight: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: 'grey.50'
-      }}>
-        <CircularProgress size={60} thickness={4} />
-        <Typography sx={{ mt: 3, fontSize: 18, color: 'text.secondary' }}>
-          Loading product details...
-        </Typography>
-      </Box>
-    )
-  }
-  
-  function ProductDetail() {
-    const theme = useTheme()
-    const { product_slug } = useParams()
-    const [product, setProduct] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
-    const [openCart, setOpenCart] = useState(false)
-    const [cartStep, setCartStep] = useState(1)
-    const { addToCart, isItemInCart } = useCart()
-  
-    const productId = product?.id
-  
-    useEffect(() => {
-      const fetchProduct = async () => {
-        try {
-          setLoading(true)
-          setError(null)
-          const response = await api.get(`product-detail/${product_slug}`)
-          setProduct(response.data)
-        } catch (err) {
-          console.error("Error fetching product:", err)
-          setError("Failed to load product details. Please try again.")
-        } finally {
-          setLoading(false)
-        }
-      }
-  
-      fetchProduct()
-    }, [product_slug])
-  
-    const handleAddToCart = () => {
-      addToCart(product)
-    }
-  
-    const handleOpenCart = () => {
-      addToCart(product)
-      setOpenCart(true)
-    }
-  
-    const handleCloseCart = () => {
-      setOpenCart(false)
-      setCartStep(1)
-    }
-  
-    if (loading) {
-      return <LoadingState />
-    }
-  
-    if (error || !product) {
-      return (
-        <Box sx={{
-          minHeight: '100dvh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: 'grey.50',
-          p: 3,
-        }}>
-          <Header />
-          <Paper elevation={0} sx={{ p: 4, textAlign: 'center', maxWidth: 400}}>
-            <Typography color="error" sx={{ fontSize: 18, mb: 2 }}>
-              {error || 'Product not found'}
-            </Typography>
-            <Button 
-              variant="contained" 
-              onClick={() => window.history.back()}
-            >
-              Go Back
-            </Button>
-          </Paper>
+          </SwiperSlide>
+        ))}
+      </Swiper>
+    </Box>
+  );
+}
+
+function RatingDisplay({ rating }) {
+  const value = Number(rating) || 0;
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+      <Stack direction="row" spacing={0.1}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star key={star} sx={{ fontSize: 19, color: star <= Math.round(value) ? "#F5A623" : brand.line }} />
+        ))}
+      </Stack>
+      <Typography sx={{ fontSize: 15, fontWeight: 700, color: brand.ink }}>{value.toFixed(1)}</Typography>
+    </Box>
+  );
+}
+
+function PriceRow({ label, value, strong }) {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+      <Typography sx={{ color: strong ? brand.ink : brand.muted, fontWeight: strong ? 700 : 400 }}>{label}</Typography>
+      <Typography sx={{ color: brand.ink, fontWeight: strong ? 800 : 500, fontSize: strong ? 20 : 16 }}>
+        {value}
+      </Typography>
+    </Box>
+  );
+}
+
+const pageSx = { minHeight: "100dvh", display: "flex", flexDirection: "column", backgroundColor: brand.bg };
+const mainSx = {
+  boxSizing: "border-box",
+  flex: 1,
+  width: "100%",
+  maxWidth: 1000,
+  mx: "auto",
+  px: { xs: 2, sm: 3 },
+  pt: { xs: 11, md: 12 },
+  pb: 3,
+};
+
+function DetailSkeleton() {
+  return (
+    <Box sx={pageSx}>
+      <Header />
+      <Box
+        component="main"
+        sx={{ ...mainSx, display: "grid", gap: 3, gridTemplateColumns: { xs: "1fr", md: "1.1fr 1fr" }, alignContent: "start" }}
+      >
+        <Skeleton variant="rounded" sx={{ width: "100%", aspectRatio: "4 / 3", height: "auto" }} />
+        <Box>
+          <Skeleton variant="text" sx={{ width: "70%", fontSize: 32 }} />
+          <Skeleton variant="text" sx={{ width: "45%", fontSize: 18 }} />
+          <Skeleton variant="rounded" height={170} sx={{ mt: 3 }} />
         </Box>
-      )
-    }
-  
-   
-    const {
-      images = [],
-      name: productName = 'Product',
-      location: productLocation = 'Location not specified',
-      rate: productRate = 0,
-      price: productPrice = 0,
-      description: productDescription = '',
-      delivery_fee: productDeliveryFee = 0
-    } = product
-  
-    const serviceFee = 10
-    const totalPrice = productPrice + serviceFee + productDeliveryFee
-  
+      </Box>
+    </Box>
+  );
+}
+
+/* ------------------------------ Product page ------------------------------ */
+
+function ProductDetail() {
+  const { product_slug } = useParams();
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [openCart, setOpenCart] = useState(false);
+  const [cartLoaded, setCartLoaded] = useState(false);
+  const [cartStep, setCartStep] = useState(1);
+  const { addToCart, isItemInCart } = useCart();
+
+  useEffect(() => {
+    let cancelled = false; // ignore late responses after leaving the page or changing product
+    setLoading(true);
+    setError(null);
+
+    api
+      .get(`product-detail/${product_slug}`)
+      .then((res) => !cancelled && setProduct(res.data))
+      .catch((err) => {
+        console.error("Error fetching product:", err);
+        if (!cancelled) setError("Couldn’t load this product. Check your connection and try again.");
+      })
+      .finally(() => !cancelled && setLoading(false));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product_slug, reloadKey]);
+
+  const inCart = product ? isItemInCart(product.id) : false;
+
+  const handleAddToCart = useCallback(() => addToCart(product), [addToCart, product]);
+
+  const handleOrderNow = useCallback(() => {
+    if (!inCart) addToCart(product); // don't add a second copy if it's already in the cart
+    setCartLoaded(true);
+    setOpenCart(true);
+  }, [addToCart, inCart, product]);
+
+  const handleCloseCart = useCallback(() => {
+    setOpenCart(false);
+    setCartStep(1);
+  }, []);
+
+  if (loading) return <DetailSkeleton />;
+
+  if (error || !product) {
     return (
-      <Box sx={{
-        minHeight: '100dvh',
-        bgcolor: 'grey.50',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      <Box sx={{ ...pageSx, alignItems: "center", justifyContent: "center", p: 3 }}>
         <Header />
-  
-        <MyCart 
-          product={product} 
-          step={cartStep} 
-          setStep={setCartStep}
-          open={openCart} 
-          handleClose={handleCloseCart}
-        />
-  
-        <Box sx={{
-          flex: 1,
-          maxWidth: 800,
-          width: '100%',
-          mx:"auto",
-          py: { xs: 2, md: 4 },
-          px: {  md: 4 },
-          mt:6
-        }}>
-          <Paper 
-            elevation={0}
-            sx={{
-              p: { xs: 2, sm: 3 },
-              borderRadius: 3,
-              bgcolor: 'white',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-            }}
-          >
-            <ProductImageGallery 
-              images={images} 
-              productName={productName} 
-            />
-  
-            <Box sx={{ mt: 3, mb: 2 }}>
-              <Typography 
-                variant="h4" 
-                sx={{ 
-                  fontWeight: 700,
-                  fontSize: { xs: 24, sm: 28 },
-                  color: 'text.primary'
-                }}
-              >
-                {productName}
-              </Typography>
-              
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                mt: 1
-              }}>
-                <RatingDisplay rating={productRate} />
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <LocationOn color="primary" sx={{ fontSize: 20 }} />
-                  <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
-                    {productLocation}
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-  
-            <Divider sx={{ my: 2 }} />
-  
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Price Details
-              </Typography>
-              <Stack spacing={1.5}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <Typography color="text.secondary">Subtotal:</Typography>
-                  <Typography>{productPrice.toFixed(2)} ETB</Typography>
-                </Box>
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <Typography color="text.secondary">Delivery Fee:</Typography>
-                  <Typography>{productDeliveryFee.toFixed(2)} ETB</Typography>
-                </Box>
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <Typography color="text.secondary">Service Fee (8%):</Typography>
-                  <Typography>{serviceFee.toFixed(2)} ETB</Typography>
-                </Box>
-                <Divider />
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Total:
-                  </Typography>
-                  <Typography 
-                    variant="h5" 
-                    color="primary" 
-                    sx={{ fontWeight: 700 }}
-                  >
-                    {totalPrice.toFixed(2)} ETB
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-  
-            <Divider sx={{ my: 2 }} />
-  
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Description
-              </Typography>
-              <ProductDescription 
-                text={productDescription} 
-                maxChars={MAX_DESCRIPTION_CHARS}
-              />
-            </Box>
-  
+        <Paper elevation={0} sx={{ ...cardSx, p: 4, textAlign: "center", maxWidth: 400 }}>
+          <Typography sx={{ fontSize: 18, fontWeight: 700, color: brand.ink }}>
+            {error || "Product not found"}
+          </Typography>
+          <Stack direction="row" spacing={1.5} justifyContent="center" sx={{ mt: 3 }}>
+            <Button variant="outlined" onClick={() => window.history.back()} sx={{ borderRadius: 999, textTransform: "none", color: brand.ink, borderColor: brand.line }}>
+              Go back
+            </Button>
+            <Button
+              variant="contained"
+              disableElevation
+              onClick={() => setReloadKey((k) => k + 1)}
+              sx={{ borderRadius: 999, textTransform: "none", backgroundColor: brand.primary, "&:hover": { backgroundColor: brand.primaryDark } }}
+            >
+              Try again
+            </Button>
+          </Stack>
+        </Paper>
+      </Box>
+    );
+  }
 
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Rate this Product
-              </Typography>
-              <HoverRating />
-            </Box>
-  
-            <Box sx={{
-              display: 'flex',
-              gap: 2,
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              pt: 2,
-              borderTop: `1px solid ${theme.palette.divider}`
-            }}>
-              {isItemInCart(productId) ? (
-                <AmountControl item={product} />
-              ) : (
-                <Button
-                  onClick={handleAddToCart}
-                  startIcon={<ShoppingCartOutlined />}
-                  variant="contained"
-                  size="large"
-                  sx={{
-                    minWidth: {xs:140,md:200},
-                    borderRadius: 2,
-                    py: {xs:1,md:1.5},
-                    fontWeight: 600,
-                    fontSize: {xs:14,md:16},
-                    bgcolor: 'success.main',
-                    '&:hover': {
-                      bgcolor: 'success.dark'
-                    }
-                  }}
-                >
-                  Add to Cart
-                </Button>
-              )}
-              
-              <Button
-                variant="contained"
-                size="large"
-                onClick={handleOpenCart}
-                sx={{
-                  minWidth:{xs:140,md:200},
-                  borderRadius: 2,
-                  py: {xs:1,md:1.5},
-                  fontWeight: 600,
-                  fontSize: {xs:14,md:16},
-                  bgcolor: '#FF8C00',
-                  '&:hover': {
-                    bgcolor: '#FFC107'
-                  }
-                }}
-              >
-                Order Now
-              </Button>
-            </Box>
+  const { images = [], name = "Product", location, rate = 0, description = "" } = product;
+  // API decimals can arrive as strings, so convert before doing math
+  const price = Number(product.price) || 0;
+  const deliveryFee = Number(product.delivery_fee) || 0;
+  const total = price + deliveryFee + SERVICE_FEE;
+
+  return (
+    <Box sx={pageSx}>
+      <Header />
+
+      {cartLoaded && (
+        <Suspense fallback={null}>
+          <MyCart product={product} step={cartStep} setStep={setCartStep} open={openCart} handleClose={handleCloseCart} />
+        </Suspense>
+      )}
+
+      <Box
+        component="main"
+        sx={{ ...mainSx, display: "grid", gap: { xs: 2.5, md: 4 }, gridTemplateColumns: { xs: "1fr", md: "1.1fr 1fr" }, alignContent: "start" }}
+      >
+        <Box sx={{ minWidth: 0, alignSelf: "start", position: { md: "sticky" }, top: { md: 88 } }}>
+          <ProductGallery images={images} productName={name} />
+        </Box>
+
+        <Box sx={{ minWidth: 0 }}>
+          <Typography component="h1" sx={{ fontSize: { xs: 26, sm: 30 }, fontWeight: 800, letterSpacing: "-0.4px", color: brand.ink }}>
+            {name}
+          </Typography>
+
+          <Box sx={{ mt: 1, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+            <RatingDisplay rating={rate} />
+            {location && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: brand.muted }}>
+                <LocationOn sx={{ fontSize: 19, color: brand.primary }} />
+                <Typography sx={{ fontSize: 14 }}>{location}</Typography>
+              </Box>
+            )}
+          </Box>
+
+          <Paper elevation={0} sx={{ ...cardSx, mt: 3, p: 2.5 }}>
+            <Typography sx={{ mb: 1.5, fontWeight: 700, color: brand.ink }}>Price details</Typography>
+            <Stack spacing={1.25}>
+              <PriceRow label="Subtotal" value={money(price)} />
+              <PriceRow label="Delivery fee" value={money(deliveryFee)} />
+              <PriceRow label="Service fee" value={money(SERVICE_FEE)} />
+              <Divider />
+              <PriceRow strong label="Total" value={money(total)} />
+            </Stack>
           </Paper>
+
+          <Box sx={{ mt: 3 }}>
+            <Typography sx={{ mb: 1, fontWeight: 700, color: brand.ink }}>About this product</Typography>
+            <ProductDescription text={description} />
+          </Box>
+
+          <Box sx={{ mt: 3 }}>
+            <Typography sx={{ mb: 1, fontWeight: 700, color: brand.ink }}>Rate this product</Typography>
+            <HoverRating />
+          </Box>
         </Box>
       </Box>
-    )
-  }
-  
-  export default ProductDetail
 
-  
+      {/* Actions stay in reach while scrolling */}
+      <Box
+        sx={{
+          boxSizing: "border-box",
+          position: "sticky",
+          bottom: 0,
+          zIndex: 10,
+          px: 2,
+          pt: 1.5,
+          pb: "calc(12px + env(safe-area-inset-bottom))",
+          backgroundColor: "rgba(255,255,255,0.94)",
+          backdropFilter: "saturate(180%) blur(12px)",
+          borderTop: `1px solid ${brand.line}`,
+        }}
+      >
+        <Box sx={{ maxWidth: 1000, mx: "auto", display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ flex: 1, display: "flex", justifyContent: "center" }}>
+            {inCart ? (
+              <AmountControl item={product} />
+            ) : (
+              <Button
+                fullWidth
+                onClick={handleAddToCart}
+                startIcon={<ShoppingCartOutlined />}
+                sx={{
+                  py: 1.25,
+                  borderRadius: 999,
+                  fontWeight: 700,
+                  textTransform: "none",
+                  color: brand.primaryDark,
+                  border: `1.5px solid ${brand.primary}`,
+                  "&:hover": { backgroundColor: brand.tint },
+                }}
+              >
+                Add to cart
+              </Button>
+            )}
+          </Box>
+
+          <Button
+            variant="contained"
+            disableElevation
+            onClick={handleOrderNow}
+            sx={{
+              flex: 1,
+              py: 1.25,
+              borderRadius: 999,
+              fontWeight: 700,
+              textTransform: "none",
+              backgroundColor: brand.primary,
+              "&:hover": { backgroundColor: brand.primaryDark },
+            }}
+          >
+            Order now
+          </Button>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+export default ProductDetail;
