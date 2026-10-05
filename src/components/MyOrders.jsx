@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { Schedule, ShoppingCartCheckout } from "@mui/icons-material";
 import api from "../api";
+import { ACCESS_TOKEN } from "../constants";
 import { Header } from "./HomePage";
 import BottomNav from "./BottomNav";
 import { brand } from "./brand";
@@ -22,7 +23,18 @@ import { brand } from "./brand";
 const TABS = ["All", "pending", "confirmed", "delivered", "cancelled"];
 const LOCKED_STATUSES = new Set(["confirmed", "delivered", "cancelled"]); // can't be cancelled any more
 const CANCEL_TIMEOUT_MS = 10000; // stop the spinner if the server never answers
-const RECONNECT_DELAY_MS = 3000;
+const RECONNECT_BASE_MS = 3000;
+const RECONNECT_MAX_MS = 30000;
+const MAX_REJECTED_ATTEMPTS = 5; // stop hammering the server when it keeps rejecting us
+// Browsers can't send an Authorization header on a WebSocket, so the JWT goes in the query string.
+
+function getToken() {
+  try {
+    return localStorage.getItem(ACCESS_TOKEN) || "";
+  } catch {
+    return "";
+  }
+}
 
 const STATUS_STYLE = {
   pending: { bg: "#F1F2F4", color: "#4B5563" },
@@ -237,17 +249,28 @@ function MyOrder() {
     loadOrders();
   }, [loadOrders]);
 
-  // One socket for the whole page. It reconnects on its own, because mobile browsers drop idle sockets.
+  // One socket for the whole page. Reconnects with exponential backoff, and gives up after
+  // repeated rejections (server says no) instead of retrying forever.
   useEffect(() => {
     let closedByUs = false;
     let retryTimer;
+    let rejectedAttempts = 0;
     const host = import.meta.env.VITE_BACKEND_HOST || "";
     const protocol = host.startsWith("http://") ? "ws" : "wss";
-    const wsUrl = `${protocol}://${host.replace(/^https?:\/\//, "")}/ws/livestatus/order-status/`;
+    const baseUrl = `${protocol}://${host.replace(/^https?:\/\//, "")}/ws/livestatus/order-status/`;
 
     const connect = () => {
-      const ws = new WebSocket(wsUrl);
+      clearTimeout(retryTimer);
+      if (closedByUs) return;
+      const token = getToken();
+      const ws = new WebSocket(token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl);
       socketRef.current = ws;
+      let opened = false;
+
+      ws.onopen = () => {
+        opened = true;
+        rejectedAttempts = 0;
+      };
 
       ws.onmessage = (event) => {
         try {
@@ -263,16 +286,38 @@ function MyOrder() {
           console.error("Error parsing WebSocket message:", error);
         }
       };
+
       ws.onerror = () => ws.close();
+
       ws.onclose = () => {
-        if (!closedByUs) retryTimer = setTimeout(connect, RECONNECT_DELAY_MS);
+        if (closedByUs || socketRef.current !== ws) return;
+        if (!opened) rejectedAttempts += 1;
+        if (rejectedAttempts >= MAX_REJECTED_ATTEMPTS) {
+          console.warn("Live order updates unavailable: the server keeps rejecting the WebSocket.");
+          return; // resumes when the tab becomes visible again or the network comes back
+        }
+        const delay = Math.min(RECONNECT_BASE_MS * 2 ** rejectedAttempts, RECONNECT_MAX_MS);
+        retryTimer = setTimeout(connect, delay + Math.random() * 1000);
       };
     };
 
+    const resume = () => {
+      if (closedByUs) return;
+      const ws = socketRef.current;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      rejectedAttempts = 0;
+      connect();
+    };
+    const onVisible = () => document.visibilityState === "visible" && resume();
+
     connect();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", resume);
     return () => {
       closedByUs = true;
       clearTimeout(retryTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", resume);
       socketRef.current?.close();
     };
   }, []);
