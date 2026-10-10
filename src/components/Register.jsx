@@ -27,6 +27,13 @@ const SignUpSchema = z.object({
 
 const onlyDigits = (value) => value.replace(/\D/g, "").slice(0, 10);
 
+// In a Telegram Mini App opened from the bot's private chat, the user's id is also the chat id.
+// Returns null when the app is opened in a normal browser.
+const getTelegramChatId = () => {
+  const id = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  return id ? String(id) : null;
+};
+
 function Register() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -49,9 +56,16 @@ function Register() {
     localStorage.removeItem(ACCESS_TOKEN);
     localStorage.removeItem(REFRESH_TOKEN);
 
+    const chatId = getTelegramChatId();
+
     let created = false;
     try {
-      await api.post("create-user/", { is_delivery: false, ...data, username: data.username.trim() });
+      await api.post("create-user/", {
+        is_delivery: false,
+        ...data,
+        username: data.username.trim(),
+        ...(chatId ? { chat_id: chatId } : {}),
+      });
       created = true;
       const resp = await api.post("api/token/", { username: data.username.trim(), password: data.password });
       localStorage.setItem(ACCESS_TOKEN, resp.data.access);
