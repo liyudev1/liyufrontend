@@ -27,12 +27,10 @@ const SignUpSchema = z.object({
 
 const onlyDigits = (value) => value.replace(/\D/g, "").slice(0, 10);
 
-// In a Telegram Mini App opened from the bot's private chat, the user's id is also the chat id.
-// Returns null when the app is opened in a normal browser.
-const getTelegramChatId = () => {
-  const id = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-  return id ? String(id) : null;
-};
+// The signed string Telegram gives a Mini App. The backend verifies it (telegram_auth.py)
+// and takes the chat id from it. A plain chat_id in the body is ignored on purpose.
+// Empty string when the app is opened in a normal browser.
+const getTelegramInitData = () => window.Telegram?.WebApp?.initData || "";
 
 function Register() {
   const navigate = useNavigate();
@@ -56,18 +54,22 @@ function Register() {
     localStorage.removeItem(ACCESS_TOKEN);
     localStorage.removeItem(REFRESH_TOKEN);
 
-    const chatId = getTelegramChatId();
+    const initData = getTelegramInitData();
 
     let created = false;
     try {
       await api.post("create-user/", {
-        is_delivery: false,
         ...data,
         username: data.username.trim(),
-        ...(chatId ? { chat_id: chatId } : {}),
+        init_data: initData,
       });
       created = true;
-      const resp = await api.post("api/token/", { username: data.username.trim(), password: data.password });
+      // auth/login/ also links the chat id, so it is saved even if the signup request could not
+      const resp = await api.post("auth/login/", {
+        username: data.username.trim(),
+        password: data.password,
+        init_data: initData,
+      });
       localStorage.setItem(ACCESS_TOKEN, resp.data.access);
       localStorage.setItem(REFRESH_TOKEN, resp.data.refresh);
       navigate("/");
