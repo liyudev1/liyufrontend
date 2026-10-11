@@ -37,7 +37,7 @@ const loginSchema = z.object({
     .max(50, 'Username must be less than 50 characters')
     .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores'),
   password: z.string()
-    .min(6, 'Password must be at least 6 characters')
+    .min(3, 'Password must be at least 3 characters')
     .max(100, 'Password is too long')
 });
 
