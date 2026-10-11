@@ -138,14 +138,13 @@ function MyCart({product,step,setStep,handleClose,open}) {
   const [phone,setPhone] = React.useState()
   const [orderLoad,setOrderLoad] = React.useState(false)
   const [newOrder, setNewOrder] = React.useState(false)
-  const {getCartItemsCount,getCartTotal,items,clearCart,getCartDeliveryTotal} = useCart()
+  const {getCartItemsCount,getCartTotal,items,clearCart} = useCart()
   const [shipping_address,setShippingAddress] = React.useState("")
   const [special_instraction,setSpecialInstraction] = React.useState("")
   const cartLength = getCartItemsCount()
   const subtotal =getCartTotal();
-  const tax = 10;
-  const DeliveryFee = getCartDeliveryTotal()
-  const total = subtotal + DeliveryFee + tax;
+  const DeliveryFee = 50;
+  const total = subtotal + DeliveryFee;
   React.useEffect(() => {
     if (newOrder) {
         const timer = setTimeout(() => {
@@ -311,10 +310,6 @@ function MyCart({product,step,setStep,handleClose,open}) {
                 <Typography color="text.secondary">Delivery Fee</Typography>
                 <Typography fontWeight={500}>{DeliveryFee.toFixed(2)} ETB</Typography>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography color="text.secondary">Service Fee</Typography>
-                <Typography fontWeight={500}>{tax.toFixed(2)} ETB</Typography>
-              </Box>
               <Divider />
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="h6" fontWeight={700}>Total</Typography>
@@ -336,7 +331,10 @@ function MyCart({product,step,setStep,handleClose,open}) {
                 fontWeight: 600,
                 textTransform: 'none',
                 boxShadow: 2,
+                backgroundColor: '#ff6f00',
+                color: '#fff',
                 '&:hover': {
+                  backgroundColor: '#e65100',
                   boxShadow: 4,
                 }
               }}
