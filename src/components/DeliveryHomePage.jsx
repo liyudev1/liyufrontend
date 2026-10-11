@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 
 
-import { useEffect,  useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api";
 import { ACCESS_TOKEN } from "../constants";
 
@@ -62,7 +62,6 @@ function DeliveryHeader(){
 }
 
 function OrderDetail({ item, open, setOpen }) {
-    console.log("item",item)
     const handleClose = () => setOpen(false);
     return (
       <BootstrapDialog
@@ -277,19 +276,23 @@ function getToken() {
 
 const normalizeOrder = (o) => ({ ...o, status: String(o?.status ?? "").toLowerCase() });
 
-function Order({ item,handleStatusChange,info }) {
+function Order({ item,handleStatusChange,info,busyStatus }) {
+    const busy = Boolean(busyStatus);
     const [open,setOpen] = useState(false)
     // Canonical statuses are sent straight to the server (no label round-trip).
     const nextStatus = { pending: "confirmed", confirmed: "delivered" };
     const handleAdminChipClick = () => {
         const next = nextStatus[item.status];
-        if (next) handleStatusChange(next, item);
+        if (next && !busy) handleStatusChange(next, item);
     };
+    // While a request is in flight: keep the chip readable, show a spinner, block clicks.
+    const busySx = busy ? { "&.Mui-disabled": { opacity: 0.85 } } : {};
+    const spinner = <CircularProgress size={14} color="inherit" />;
     const accentChipSx = item.status === "pending"
         ? { backgroundColor: "#FF5722", color: "#fff", "&:hover": { backgroundColor: "#E64A19" } }
         : {};
     const handleAcceptClick = () => {
-        if (item.status === "pending") handleStatusChange("confirmed", item);
+        if (item.status === "pending" && !busy) handleStatusChange("confirmed", item);
     };
     const statusMap = {
         "Accept":"confirmed",
@@ -395,9 +398,12 @@ function Order({ item,handleStatusChange,info }) {
                         label="Reject" 
                         color={getStatusColor("cancelled")}
                         clickable
-                        onClick={()=>handleStatusChange("cancelled",item)}
+                        onClick={()=>{ if (!busy) handleStatusChange("cancelled",item); }}
+                        disabled={busy}
+                        icon={busyStatus === "cancelled" ? spinner : undefined}
                         variant={"outlined"}
                         sx={{
+                            ...busySx,
                             fontWeight: 600,
                             textTransform: 'capitalize',
                             minWidth: 80
@@ -409,9 +415,12 @@ function Order({ item,handleStatusChange,info }) {
                         color={getStatusColor(item.status === "confirmed" && info.is_admin?"confirmed":statusMap[item.status])}
                         clickable
                         onClick={handleAdminChipClick}
+                        disabled={busy}
+                        icon={busy && busyStatus !== "cancelled" ? spinner : undefined}
                         variant={item.status === "confirmed" && info.is_admin?"filled":item.status === "confirmed"? "outlined":"filled"}
                         sx={{
                             ...accentChipSx,
+                            ...busySx,
                             fontWeight: 600,
                             textTransform: 'capitalize',
                             minWidth: 80
@@ -425,9 +434,12 @@ function Order({ item,handleStatusChange,info }) {
                         color={getStatusColor(item.status)}
                         clickable
                         onClick={handleAcceptClick}
+                        disabled={busy}
+                        icon={busy ? spinner : undefined}
                         variant={item.status === "confirmed"? "outlined":"filled"}
                         sx={{
                             ...accentChipSx,
+                            ...busySx,
                             fontWeight: 600,
                             textTransform: 'capitalize',
                             minWidth: 80
@@ -567,6 +579,22 @@ function DeliveryHomePage() {
     const [info, setInfo] = useState();
     const [socket, setSocket] = useState(null);
     const [toast, setToast] = useState("");
+    // order id -> status we asked for, while waiting for the server to confirm
+    const [pending, setPending] = useState({});
+    const timersRef = useRef({});
+
+    const clearPending = (orderId) => {
+        const key = String(orderId);
+        clearTimeout(timersRef.current[key]);
+        delete timersRef.current[key];
+        setPending((prev) => {
+            if (!(key in prev)) return prev;
+            const { [key]: _done, ...rest } = prev;
+            return rest;
+        });
+    };
+
+    useEffect(() => () => Object.values(timersRef.current).forEach(clearTimeout), []);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -580,7 +608,7 @@ function DeliveryHomePage() {
                 const result = await api.get(url);
                 setMyOrder(result.data.map(normalizeOrder));
             } catch (error) {
-                console.log("error while getting my-orders", error);
+                console.error("error while getting my-orders", error);
             } finally {
                 setLoading(false);
             }
@@ -588,6 +616,7 @@ function DeliveryHomePage() {
         getMyOrders();
     }, []);
     const updateOrderStatus = (orderId, newStatus) => {
+        clearPending(orderId);
         setMyOrder(prev =>
             prev.map(order =>
                 String(order.id) === String(orderId)
@@ -621,7 +650,6 @@ function DeliveryHomePage() {
             ws = new WebSocket(token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl);
 
             ws.onopen = () => {
-                console.log("WebSocket connection established");
                 retries = 0;
                 setSocket(ws);
             };
@@ -630,7 +658,6 @@ function DeliveryHomePage() {
                 try {
                     const response = JSON.parse(event.data);
                     const wsData = response?.data;
-                    console.log("WebSocket message:", response);
                     if (!wsData) return;
 
                     if (response.type === "status_update") {
@@ -655,7 +682,6 @@ function DeliveryHomePage() {
 
             ws.onclose = (event) => {
                 if (closedByUs) return;
-                console.log("WebSocket connection closed, retrying:", event);
                 setSocket(null);
                 const delay = Math.min(1000 * 2 ** retries, 15000);
                 retries += 1;
@@ -683,6 +709,9 @@ function DeliveryHomePage() {
             console.warn("info.person is missing; the server may reject this update");
         }
 
+        const key = String(item.id);
+        if (pending[key]) return; // already waiting on this order
+
         socket.send(
             JSON.stringify({
                 type: "status_update",
@@ -693,6 +722,13 @@ function DeliveryHomePage() {
                 },
             })
         );
+
+        setPending((prev) => ({ ...prev, [key]: status }));
+        // If the server never answers, stop the spinner so the user can retry.
+        timersRef.current[key] = setTimeout(() => {
+            clearPending(item.id);
+            setToast("The server did not respond. Please try again.");
+        }, 10000);
     }
 
     const filteredOrders = my_order.filter(
@@ -814,6 +850,7 @@ function DeliveryHomePage() {
                                         item={item}
                                         info={info}
                                         handleStatusChange={handleStatusChange}
+                                        busyStatus={pending[String(item.id)]}
                                     />
                                 ))}
                             </Stack>
