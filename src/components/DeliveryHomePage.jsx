@@ -11,18 +11,20 @@ import {
     useTheme,
     useMediaQuery,
     CircularProgress,
-    Container
+    Container,
+    Snackbar
 } from "@mui/material";
 
 
 import { useEffect,  useState } from "react";
 import api from "../api";
+import { ACCESS_TOKEN } from "../constants";
 
 
 const GlassAppBar = styled(AppBar)(({ theme }) => ({
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     backdropFilter: 'blur(10px)',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+    borderBottom: '1px solid #E5E7EB',
     boxShadow: 'none',
     height: "65px",
   }));
@@ -51,8 +53,7 @@ function DeliveryHeader(){
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: 2,
-                height: "100%",
-                boxShadow: 1
+                height: "100%"
             }}>
                 <DeliveryLogo/>
             </Toolbar>
@@ -265,8 +266,31 @@ function OrderDetail({ item, open, setOpen }) {
   
 
 
+// Browsers can't send an Authorization header on a WebSocket, so the JWT goes in the query string.
+function getToken() {
+    try {
+        return localStorage.getItem(ACCESS_TOKEN) || "";
+    } catch {
+        return "";
+    }
+}
+
+const normalizeOrder = (o) => ({ ...o, status: String(o?.status ?? "").toLowerCase() });
+
 function Order({ item,handleStatusChange,info }) {
     const [open,setOpen] = useState(false)
+    // Canonical statuses are sent straight to the server (no label round-trip).
+    const nextStatus = { pending: "confirmed", confirmed: "delivered" };
+    const handleAdminChipClick = () => {
+        const next = nextStatus[item.status];
+        if (next) handleStatusChange(next, item);
+    };
+    const accentChipSx = item.status === "pending"
+        ? { backgroundColor: "#FF5722", color: "#fff", "&:hover": { backgroundColor: "#E64A19" } }
+        : {};
+    const handleAcceptClick = () => {
+        if (item.status === "pending") handleStatusChange("confirmed", item);
+    };
     const statusMap = {
         "Accept":"confirmed",
         "Regect":"cancelled",
@@ -312,15 +336,14 @@ function Order({ item,handleStatusChange,info }) {
         <Card 
             sx={{ 
                 width: "100%", 
-                borderRadius: 3, 
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                borderRadius: 2, 
+                boxShadow: 'none',
                 backgroundColor:"white",
-                transition: 'all 0.3s ease-in-out',
+                transition: 'border-color 0.2s ease',
                 '&:hover': {
-                    boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
-                    transform: 'translateY(-2px)'
+                    borderColor: '#FFB199',
                 },
-                border: `1px solid ${theme.palette.divider}`,
+                border: '1px solid #E5E7EB',
                 overflow: 'hidden'
             }}
         >
@@ -341,8 +364,8 @@ function Order({ item,handleStatusChange,info }) {
                             display: 'flex',
                             alignItems: 'center',
                             gap: 1,
-                            backgroundColor: theme.palette.grey[600],
-                            color: 'white',
+                            backgroundColor: '#F3F4F6',
+                            color: 'text.primary',
                             px: 1.5,
                             py: 0.5,
                             borderRadius: 2
@@ -372,7 +395,7 @@ function Order({ item,handleStatusChange,info }) {
                         label="Reject" 
                         color={getStatusColor("cancelled")}
                         clickable
-                        onClick={()=>handleStatusChange(statusMap["Regect"],item)}
+                        onClick={()=>handleStatusChange("cancelled",item)}
                         variant={"outlined"}
                         sx={{
                             fontWeight: 600,
@@ -385,9 +408,10 @@ function Order({ item,handleStatusChange,info }) {
                         label={item.status === "confirmed" && info.is_admin?"Complete":statusMap[item.status]} 
                         color={getStatusColor(item.status === "confirmed" && info.is_admin?"confirmed":statusMap[item.status])}
                         clickable
-                        onClick={()=>handleStatusChange(statusMap[item.status === "confirmed" && info.is_admin?"Complete":item.status],item)}
+                        onClick={handleAdminChipClick}
                         variant={item.status === "confirmed" && info.is_admin?"filled":item.status === "confirmed"? "outlined":"filled"}
                         sx={{
+                            ...accentChipSx,
                             fontWeight: 600,
                             textTransform: 'capitalize',
                             minWidth: 80
@@ -400,9 +424,10 @@ function Order({ item,handleStatusChange,info }) {
                         label={statusMap[item.status]} 
                         color={getStatusColor(item.status)}
                         clickable
-                        onClick={()=>handleStatusChange(statusMap[item.status],item)}
-                        variant={item.status === "Accepted"? "outlined":"filled"}
+                        onClick={handleAcceptClick}
+                        variant={item.status === "confirmed"? "outlined":"filled"}
                         sx={{
+                            ...accentChipSx,
                             fontWeight: 600,
                             textTransform: 'capitalize',
                             minWidth: 80
@@ -477,153 +502,54 @@ function Tabs({ category, setCategory, tabList }) {
         "delivered":"Delivered"
     }
     
-    const tabColors = {
-        activeBg: '#E31837', 
-        activeText: '#FFFFFF',
-        inactiveBg: 'transparent',
-        inactiveText: '#666666',
-        inactiveBorder: '#E0E0E0',
-        hoverBg: '#FFF5F5',
-        containerBg: '#F8F8F8',
-    };
+    const accent = '#FF5722';
+    const accentDark = '#E64A19';
+    const tabs = ["All", ...tabList];
 
     function handleTabChange(category_name) {
         setCategory(category_name);
     }
 
     return (
-        <Box 
+        <Box
             sx={{
                 display: "flex",
                 alignItems: "center",
                 gap: 1,
                 overflowX: "auto",
-                mb: 4,
-                p: 2,
-                borderRadius: 3,
-                mx: isMobile ? -2 : 0,
-                position: 'relative',
-                scrollBehavior: 'smooth',
-                '&::-webkit-scrollbar': { 
-                    height: 8,
-                    display: 'block',
-                    backgroundColor: 'transparent'
-                },
-                '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: theme.palette.divider,
-                    borderRadius: 4,
-                    '&:hover': {
-                        backgroundColor: theme.palette.action.hover,
-                    }
-                },
-                '&::-webkit-scrollbar-track': {
-                    backgroundColor: 'transparent'
-                },
-                ...(isMobile && {
-                    '&::-webkit-scrollbar': {
-                        display: 'none'
-                    },
-                    WebkitOverflowScrolling: 'touch'
-                })
+                mb: 3,
+                py: 0.5,
+                scrollbarWidth: "none",
+                "&::-webkit-scrollbar": { display: "none" },
+                WebkitOverflowScrolling: "touch",
             }}
         >
-            <Button 
-                variant="text"
-                onClick={() => handleTabChange("All")}
-                sx={{
-                    borderRadius: '24px',
-                    fontSize: isMobile ? '0.875rem' : '0.9375rem',
-                    textTransform: "capitalize",
-                    minWidth: 'auto',
-                    px: 3,
-                    py: 1,
-                    fontWeight: category === "All" ? 700 : 600,
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    whiteSpace: 'nowrap',
-                    border: category === "All" 
-                        ? `2px solid ${tabColors.activeBg}` 
-                        : `2px solid ${tabColors.inactiveBorder}`,
-                    backgroundColor: category === "All" 
-                        ? tabColors.activeBg 
-                        : tabColors.inactiveBg,
-                    color: category === "All" 
-                        ? tabColors.activeText 
-                        : tabColors.inactiveText,
-                    boxShadow: category === "All" 
-                        ? '0 4px 12px rgba(227, 24, 55, 0.2)' 
-                        : 'none',
-                    '&:hover': {
-                        backgroundColor: category === "All" 
-                            ? '#D10E2F' // Darker red on hover
-                            : tabColors.hoverBg,
-                        borderColor: category === "All" 
-                            ? '#D10E2F' 
-                            : theme.palette.primary.light,
-                        color: category === "All" 
-                            ? tabColors.activeText 
-                            : theme.palette.primary.main,
-                        transform: 'translateY(-2px)',
-                        boxShadow: category === "All" 
-                            ? '0 6px 16px rgba(227, 24, 55, 0.25)' 
-                            : '0 4px 12px rgba(0, 0, 0, 0.08)'
-                    },
-                    '&:active': {
-                        transform: 'translateY(0)',
-                        transition: 'transform 0.1s'
-                    }
-                }}
-            >
-                All
-            </Button>
-            
-            {tabList.map((tab, index) => {
+            {tabs.map((tab) => {
                 const isActive = category === tab;
                 return (
                     <Button
-                        onClick={() => handleTabChange(tab)}
-                        key={index}
+                        key={tab}
                         variant="text"
+                        disableElevation
+                        onClick={() => handleTabChange(tab)}
                         sx={{
-                            borderRadius: '24px',
-                            fontSize: isMobile ? '0.875rem' : '0.9375rem',
-                            textTransform: "capitalize",
-                            minWidth: 'auto',
-                            px: 3,
-                            py: 1,
-                            fontWeight: isActive ? 700 : 600,
-                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                            whiteSpace: 'nowrap',
-                            border: isActive 
-                                ? `2px solid ${tabColors.activeBg}` 
-                                : `2px solid ${tabColors.inactiveBorder}`,
-                            backgroundColor: isActive 
-                                ? tabColors.activeBg 
-                                : tabColors.inactiveBg,
-                            color: isActive 
-                                ? tabColors.activeText 
-                                : tabColors.inactiveText,
-                            boxShadow: isActive 
-                                ? '0 4px 12px rgba(227, 24, 55, 0.2)' 
-                                : 'none',
-                            '&:hover': {
-                                backgroundColor: isActive 
-                                    ? '#D10E2F'
-                                    : tabColors.hoverBg,
-                                borderColor: isActive 
-                                    ? '#D10E2F' 
-                                    : theme.palette.primary.light,
-                                color: isActive 
-                                    ? tabColors.activeText 
-                                    : theme.palette.primary.main,
-                                transform: 'translateY(-2px)',
-                                boxShadow: isActive 
-                                    ? '0 6px 16px rgba(227, 24, 55, 0.25)' 
-                                    : '0 4px 12px rgba(0, 0, 0, 0.08)'
+                            borderRadius: 2,
+                            fontSize: isMobile ? "0.875rem" : "0.9375rem",
+                            textTransform: "none",
+                            minWidth: "auto",
+                            px: 2.5,
+                            py: 0.75,
+                            fontWeight: isActive ? 700 : 500,
+                            whiteSpace: "nowrap",
+                            boxShadow: "none",
+                            border: `1px solid ${isActive ? accent : "#E5E7EB"}`,
+                            backgroundColor: isActive ? accent : "white",
+                            color: isActive ? "#fff" : "#4B5563",
+                            "&:hover": {
+                                boxShadow: "none",
+                                borderColor: accent,
+                                backgroundColor: isActive ? accentDark : "#FFF3EE",
                             },
-                            '&:active': {
-                                transform: 'translateY(0)',
-                                transition: 'transform 0.1s'
-                            }
                         }}
                     >
                         {tabMap[tab]}
@@ -640,6 +566,7 @@ function DeliveryHomePage() {
     const [my_order, setMyOrder] = useState([]);
     const [info, setInfo] = useState();
     const [socket, setSocket] = useState(null);
+    const [toast, setToast] = useState("");
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -651,7 +578,7 @@ function DeliveryHomePage() {
             const url = "get-orders-monitor/";
             try {
                 const result = await api.get(url);
-                setMyOrder(result.data);
+                setMyOrder(result.data.map(normalizeOrder));
             } catch (error) {
                 console.log("error while getting my-orders", error);
             } finally {
@@ -663,8 +590,8 @@ function DeliveryHomePage() {
     const updateOrderStatus = (orderId, newStatus) => {
         setMyOrder(prev =>
             prev.map(order =>
-                order.id === orderId
-                    ? { ...order, status: newStatus }
+                String(order.id) === String(orderId)
+                    ? { ...order, status: String(newStatus).toLowerCase() }
                     : order
             )
         );
@@ -672,111 +599,100 @@ function DeliveryHomePage() {
     
     const addNewOrder = (newOrder) => {
         setMyOrder(prev => {
-            const exists = prev.some(o => o.id === newOrder.id);
+            const exists = prev.some(o => String(o.id) === String(newOrder.id));
             if (exists) return prev;
     
-            return [...prev, newOrder];
+            return [...prev, normalizeOrder(newOrder)];
         });
     };
 
     useEffect(() => {
-        let url = import.meta.env.VITE_BACKEND_HOST;
-        const djangoHost = url.replace(/^https?:\/\//, "");
-        const wsUrl = `wss://${djangoHost}/ws/livestatus/order-status/`;
-        
-        let ws;
-        
-        try {
-            ws = new WebSocket(wsUrl);
-            setSocket(ws);
-            
+        const host = import.meta.env.VITE_BACKEND_HOST.replace(/^https?:\/\//, "");
+        const baseUrl = `wss://${host}/ws/livestatus/order-status/`;
+
+        let ws = null;
+        let retryTimer = null;
+        let retries = 0;
+        let closedByUs = false;
+
+        const connect = () => {
+            // Read the token on every (re)connect so a refreshed JWT is picked up.
+            const token = getToken();
+            ws = new WebSocket(token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl);
+
             ws.onopen = () => {
                 console.log("WebSocket connection established");
+                retries = 0;
+                setSocket(ws);
             };
-            
+
             ws.onmessage = (event) => {
                 try {
                     const response = JSON.parse(event.data);
                     const wsData = response?.data;
-            
-                    console.log("WebSocket message:", wsData);
-                    const status_type = response?.type
-
+                    console.log("WebSocket message:", response);
                     if (!wsData) return;
-                    console.log(status_type)
-                    if (status_type === "status_update") {
-                        if (wsData.id && wsData.status) {
-                            updateOrderStatus(wsData.id, wsData.status);
-                            console.log(`Updated order ${wsData.id}`);
+
+                    if (response.type === "status_update") {
+                        const id = wsData.id ?? wsData.order_id;
+                        if (id !== undefined && wsData.status) {
+                            updateOrderStatus(id, wsData.status);
                         }
                         return;
                     }
-            
-                    if (status_type === "add_order") {
-                        if (wsData) {
-                            addNewOrder(wsData);
-                            console.log("New order added:", wsData);
-                        }
-                        return;
+
+                    if (response.type === "add_order") {
+                        addNewOrder(wsData);
                     }
-            
                 } catch (error) {
                     console.error("Error parsing WebSocket message:", error);
                 }
             };
-            
+
             ws.onerror = (error) => {
                 console.error("WebSocket error:", error);
             };
-            
+
             ws.onclose = (event) => {
-                console.log("WebSocket connection closed:", event);
+                if (closedByUs) return;
+                console.log("WebSocket connection closed, retrying:", event);
+                setSocket(null);
+                const delay = Math.min(1000 * 2 ** retries, 15000);
+                retries += 1;
+                retryTimer = setTimeout(connect, delay);
             };
-        } catch (error) {
-            console.error("WebSocket connection failed:", error);
-        }
-        
-        // Cleanup function
-        return () => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.close();
-            }
         };
-    }, []); 
 
+        connect();
 
-    const statusMap = {
-        Accept: "confirmed",
-        Regect: "cancelled",
-        Complete: "delivered",
-        pending: "Accept",
-        confirmed: "Accepted",
-        cancelled: "cancelled",
-        delivered: "delivered",
-    };
+        return () => {
+            closedByUs = true;
+            clearTimeout(retryTimer);
+            if (ws) ws.close();
+        };
+    }, []);
 
-    async function handleStatusChange(status, item) {
+    // `status` must be a canonical value: "confirmed" | "cancelled" | "delivered"
+    function handleStatusChange(status, item) {
         if (!socket || socket.readyState !== WebSocket.OPEN) {
             console.error("WebSocket is not connected");
+            setToast("Not connected to the server yet. Please try again in a moment.");
             return;
         }
-        
-        try {
-            const data = {
-                person: info?.person,
-                status: statusMap[status],
-                order_id: item.id,
-            };
-            socket.send(
-                JSON.stringify({
-                    data: data,
-                    type: "status_update"
-                })
-            );
-        } catch (error) {
-            console.error("API call failed:", error);
-            throw error;
+        if (!info?.person) {
+            console.warn("info.person is missing; the server may reject this update");
         }
+
+        socket.send(
+            JSON.stringify({
+                type: "status_update",
+                data: {
+                    person: info?.person,
+                    status,
+                    order_id: item.id,
+                },
+            })
+        );
     }
 
     const filteredOrders = my_order.filter(
@@ -805,6 +721,7 @@ function DeliveryHomePage() {
             }}
         >
             <DeliveryHeader />
+            <Snackbar open={!!toast} autoHideDuration={3000} onClose={() => setToast("")} message={toast} />
             <Box
                 sx={{
                     minHeight: "100dvh",
@@ -872,8 +789,8 @@ function DeliveryHomePage() {
                                     textAlign: "center",
                                     py: 8,
                                     backgroundColor: "white",
-                                    borderRadius: 3,
-                                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                                    borderRadius: 2,
+                                    border: "1px solid #E5E7EB",
                                 }}
                             >
                                 <Typography variant="h6" color="text.secondary">
