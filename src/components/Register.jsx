@@ -13,6 +13,9 @@ import { brand } from "./brand";
 // The old pattern also allowed a backslash by accident
 const usernameRegex = /^[\w@.+-]+$/;
 
+// Keep this in sync with the backend (UserSerializer password min_length)
+const MIN_PASSWORD_LENGTH = 3;
+
 const SignUpSchema = z.object({
   username: z
     .string()
@@ -22,7 +25,9 @@ const SignUpSchema = z.object({
     .string()
     .length(10, "Phone must be exactly 10 digits")
     .regex(/^\d+$/, "Phone must contain only numbers"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z
+    .string()
+    .min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`),
 });
 
 const onlyDigits = (value) => value.replace(/\D/g, "").slice(0, 10);
@@ -79,6 +84,8 @@ function Register() {
         setFormError("Your account was created, but we couldn’t sign you in. Please log in.");
       } else if (error.response?.data?.username) {
         setError("username", { message: "This username is already taken" });
+      } else if (error.response?.data?.password) {
+        setError("password", { message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
       } else if (!error.response) {
         setFormError("Couldn’t reach the server. Check your connection and try again.");
       } else {
@@ -123,7 +130,7 @@ function Register() {
           type="password"
           icon={<Lock />}
           autoComplete="new-password"
-          hint="At least 8 characters"
+          hint={`At least ${MIN_PASSWORD_LENGTH} characters`}
         />
 
         {formError && (

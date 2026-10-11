@@ -22,6 +22,9 @@ import { useNavigate } from 'react-router-dom';
 
 const usernameRegex = /^[a-zA-Z0-9_@.+\\-]+$/;
 
+// Keep this in sync with the backend (UserSerializer password min_length)
+const MIN_PASSWORD_LENGTH = 3;
+
 const SignUpSchema = z.object({
     username: z.string().regex(usernameRegex, {
         message: "Username may only contain alphanumeric characters, _, @, +, ., and -",
@@ -30,7 +33,7 @@ const SignUpSchema = z.object({
         .min(10, "Phone must be exactly 10 characters")
         .max(10, "Phone must be exactly 10 characters")
         .regex(/^\d+$/, "Phone must contain only numbers"),
-    password: z.string().min(8, "Password must be more than 8 characters!"),
+    password: z.string().min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`),
     chat_id: z.string()
 })
 
